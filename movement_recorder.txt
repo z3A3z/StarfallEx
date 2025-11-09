@@ -1,6 +1,6 @@
 --@name Movement Recorder & Cloner
 --@author
---@server
+--@shared
 
 --[[
     Press NUM 1: Spawn a hologram clone that replays your recorded movements
@@ -10,160 +10,179 @@
     All clones loop the same recording path indefinitely.
 ]]
 
--- Recording data
-local recording = {}
-local isRecording = true
-local recordingStartTime = timer.curtime()
+if SERVER then
+    -- Server: Recording data
+    local recording = {}
+    local recordingStartTime = timer.curtime()
+    local clones = {}
 
--- Clone management
-local clones = {}
+    -- Receive frame data from client
+    net.receive("recordFrame", function(len, ply)
+        local frameData = net.readTable()
+        frameData.time = timer.curtime() - recordingStartTime
+        table.insert(recording, frameData)
+    end)
 
--- Record player data every frame
-hook.add("think", "record_movement", function()
-    if not isRecording then return end
-
-    local ply = owner()
-    if not ply:isValid() then return end
-
-    -- Get body angles (only yaw, keep pitch/roll at 0 for proper standing pose)
-    local bodyAng = ply:getAngles()
-    local bodyYaw = Angle(0, bodyAng.y, 0)
-
-    -- Get the actual animation sequence from the player
-    local seqID = ply:getSequence()
-
-    -- Get pose parameters for movement
-    local moveX = ply:getPose("move_x")
-    local moveY = ply:getPose("move_y")
-
-    local frame = {
-        pos = ply:getPos(),
-        ang = bodyYaw,
-        seq = seqID,
-        moveX = moveX,
-        moveY = moveY,
-        model = ply:getModel(),
-        time = timer.curtime() - recordingStartTime
-    }
-
-    table.insert(recording, frame)
-end)
-
--- Spawn a clone that replays the recording
-local function spawnClone()
-    if #recording == 0 then
-        print("[Clone] No recording data available!")
-        return
-    end
-
-    -- Get starting frame data
-    local startFrame = recording[1]
-
-    -- Create hologram
-    local holo = holograms.create(
-        startFrame.pos,
-        startFrame.ang,
-        startFrame.model,
-        Vector(1, 1, 1)
-    )
-
-    if not holo then
-        print("[Clone] Failed to create hologram!")
-        return
-    end
-
-    -- Set initial animation and let it play naturally
-    holo:setAnimation(startFrame.seq, 0, 1)
-
-    -- Set initial pose parameters
-    holo:setPose("move_x", startFrame.moveX)
-    holo:setPose("move_y", startFrame.moveY)
-
-    -- Store clone data - all clones share the same recording reference
-    local cloneData = {
-        holo = holo,
-        startTime = timer.curtime(),
-        currentFrame = 1,
-        currentSeq = startFrame.seq
-    }
-
-    table.insert(clones, cloneData)
-
-    print("[Clone] Spawned clone #" .. #clones .. " (using live recording with " .. #recording .. " frames)")
-end
-
--- Remove the last spawned clone
-local function removeLastClone()
-    if #clones == 0 then
-        print("[Clone] No clones to remove!")
-        return
-    end
-
-    local lastClone = table.remove(clones)
-    if lastClone.holo:isValid() then
-        lastClone.holo:remove()
-    end
-
-    print("[Clone] Removed clone. " .. #clones .. " clones remaining.")
-end
-
--- Update all clones
-hook.add("think", "update_clones", function()
-    if #recording == 0 then return end
-
-    for i = #clones, 1, -1 do
-        local clone = clones[i]
-
-        if not clone.holo:isValid() then
-            table.remove(clones, i)
-        else
-            local elapsed = timer.curtime() - clone.startTime
-            local totalFrames = #recording
-            local totalDuration = recording[totalFrames].time
-
-            -- Loop the recording infinitely
-            if totalDuration > 0 then
-                elapsed = elapsed % totalDuration
-            end
-
-            -- Find the appropriate frame based on elapsed time
-            local targetFrame = 1
-            for j = 1, totalFrames do
-                if recording[j].time <= elapsed then
-                    targetFrame = j
-                else
-                    break
-                end
-            end
-
-            -- Apply the frame data
-            local frame = recording[targetFrame]
-            clone.holo:setPos(frame.pos)
-            clone.holo:setAngles(frame.ang)
-
-            -- Set pose parameters for leg movement
-            clone.holo:setPose("move_x", frame.moveX)
-            clone.holo:setPose("move_y", frame.moveY)
-
-            -- Only change animation when sequence changes - let it play naturally
-            if clone.currentSeq ~= frame.seq then
-                clone.holo:setAnimation(frame.seq, 0, 1)
-                clone.currentSeq = frame.seq
-            end
-
-            clone.currentFrame = targetFrame
+    -- Spawn a clone
+    net.receive("spawnClone", function(len, ply)
+        if #recording == 0 then
+            net.start("cloneMessage")
+            net.writeString("[Clone] No recording data available!")
+            net.send(ply)
+            return
         end
-    end
-end)
 
--- Key input
-hook.add("inputPressed", "clone_controls", function(key)
-    if key == KEY.PAD_1 then
-        spawnClone()
-    elseif key == KEY.PAD_2 then
-        removeLastClone()
-    end
-end)
+        local startFrame = recording[1]
 
-print("[Movement Recorder] Loaded! Recording started.")
-print("[Movement Recorder] Numpad 1: Spawn clone | Numpad 2: Remove last clone")
+        -- Create hologram
+        local holo = holograms.create(
+            startFrame.pos,
+            startFrame.ang,
+            startFrame.model,
+            Vector(1, 1, 1)
+        )
+
+        if not holo then
+            net.start("cloneMessage")
+            net.writeString("[Clone] Failed to create hologram!")
+            net.send(ply)
+            return
+        end
+
+        -- Set initial animation and pose
+        holo:setAnimation(startFrame.seq, 0, 1)
+        holo:setPose("move_x", startFrame.moveX)
+        holo:setPose("move_y", startFrame.moveY)
+
+        -- Store clone data
+        local cloneData = {
+            holo = holo,
+            startTime = timer.curtime(),
+            currentFrame = 1,
+            currentSeq = startFrame.seq
+        }
+
+        table.insert(clones, cloneData)
+
+        net.start("cloneMessage")
+        net.writeString("[Clone] Spawned clone #" .. #clones .. " (using live recording with " .. #recording .. " frames)")
+        net.send(ply)
+    end)
+
+    -- Remove last clone
+    net.receive("removeClone", function(len, ply)
+        if #clones == 0 then
+            net.start("cloneMessage")
+            net.writeString("[Clone] No clones to remove!")
+            net.send(ply)
+            return
+        end
+
+        local lastClone = table.remove(clones)
+        if lastClone.holo:isValid() then
+            lastClone.holo:remove()
+        end
+
+        net.start("cloneMessage")
+        net.writeString("[Clone] Removed clone. " .. #clones .. " clones remaining.")
+        net.send(ply)
+    end)
+
+    -- Update all clones
+    hook.add("think", "update_clones", function()
+        if #recording == 0 then return end
+
+        for i = #clones, 1, -1 do
+            local clone = clones[i]
+
+            if not clone.holo:isValid() then
+                table.remove(clones, i)
+            else
+                local elapsed = timer.curtime() - clone.startTime
+                local totalFrames = #recording
+                local totalDuration = recording[totalFrames].time
+
+                -- Loop the recording infinitely
+                if totalDuration > 0 then
+                    elapsed = elapsed % totalDuration
+                end
+
+                -- Find the appropriate frame based on elapsed time
+                local targetFrame = 1
+                for j = 1, totalFrames do
+                    if recording[j].time <= elapsed then
+                        targetFrame = j
+                    else
+                        break
+                    end
+                end
+
+                -- Apply the frame data
+                local frame = recording[targetFrame]
+                clone.holo:setPos(frame.pos)
+                clone.holo:setAngles(frame.ang)
+
+                -- Set pose parameters for leg movement
+                clone.holo:setPose("move_x", frame.moveX)
+                clone.holo:setPose("move_y", frame.moveY)
+
+                -- Only change animation when sequence changes
+                if clone.currentSeq ~= frame.seq then
+                    clone.holo:setAnimation(frame.seq, 0, 1)
+                    clone.currentSeq = frame.seq
+                end
+
+                clone.currentFrame = targetFrame
+            end
+        end
+    end)
+end
+
+if CLIENT then
+    -- Client: Record player data and send to server
+    hook.add("think", "record_movement", function()
+        local ply = player()
+        if not ply:isValid() then return end
+
+        -- Get body angles (only yaw)
+        local bodyAng = ply:getAngles()
+        local bodyYaw = Angle(0, bodyAng.y, 0)
+
+        -- Get animation and pose data
+        local seqID = ply:getSequence()
+        local moveX = ply:getPose("move_x")
+        local moveY = ply:getPose("move_y")
+
+        -- Send frame data to server
+        net.start("recordFrame")
+        net.writeTable({
+            pos = ply:getPos(),
+            ang = bodyYaw,
+            seq = seqID,
+            moveX = moveX,
+            moveY = moveY,
+            model = ply:getModel()
+        })
+        net.send()
+    end)
+
+    -- Client: Input detection
+    hook.add("inputPressed", "clone_controls", function(key)
+        if key == KEY.PAD_1 then
+            net.start("spawnClone")
+            net.send()
+        elseif key == KEY.PAD_2 then
+            net.start("removeClone")
+            net.send()
+        end
+    end)
+
+    -- Client: Receive messages from server
+    net.receive("cloneMessage", function()
+        local msg = net.readString()
+        print(msg)
+    end)
+
+    print("[Movement Recorder] Loaded! Recording started.")
+    print("[Movement Recorder] Numpad 1: Spawn clone | Numpad 2: Remove last clone")
+end
