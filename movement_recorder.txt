@@ -1,0 +1,194 @@
+--@name Movement Recorder & Cloner
+--@author
+--@client
+
+--[[
+    Press NUM 1: Spawn a hologram clone that replays your recorded movements
+    Press NUM 2: Remove the last spawned clone
+
+    The code continuously records your position, angles, model, and animation.
+    Clones will loop the recorded movements indefinitely.
+]]
+
+-- Recording data
+local recording = {}
+local isRecording = true
+local recordingStartTime = timer.curtime()
+
+-- Clone management
+local clones = {}
+local clonePlaybackData = {}
+
+-- Helper function to copy table
+local function copyTable(t)
+    local copy = {}
+    for k, v in pairs(t) do
+        copy[k] = v
+    end
+    return copy
+end
+
+-- Record player data every frame
+hook.add("think", "record_movement", function()
+    if not isRecording then return end
+
+    local ply = owner()
+    if not ply:isValid() then return end
+
+    local frame = {
+        pos = ply:getPos(),
+        ang = ply:getEyeAngles(),
+        vel = ply:getVelocity(),
+        sequence = ply:getSequence(),
+        cycle = ply:getCycle(),
+        model = ply:getModel(),
+        time = timer.curtime() - recordingStartTime
+    }
+
+    table.insert(recording, frame)
+end)
+
+-- Spawn a clone that replays the recording
+local function spawnClone()
+    if #recording == 0 then
+        print("[Clone] No recording data available!")
+        return
+    end
+
+    -- Make a copy of the current recording
+    local recordingCopy = {}
+    for i, frame in ipairs(recording) do
+        recordingCopy[i] = {
+            pos = Vector(frame.pos.x, frame.pos.y, frame.pos.z),
+            ang = Angle(frame.ang.p, frame.ang.y, frame.ang.r),
+            vel = Vector(frame.vel.x, frame.vel.y, frame.vel.z),
+            sequence = frame.sequence,
+            cycle = frame.cycle,
+            model = frame.model,
+            time = frame.time
+        }
+    end
+
+    -- Get starting frame data
+    local startFrame = recordingCopy[1]
+
+    -- Create hologram
+    local holo = holograms.create(
+        startFrame.pos,
+        startFrame.ang,
+        startFrame.model,
+        Vector(1, 1, 1)
+    )
+
+    if not holo then
+        print("[Clone] Failed to create hologram!")
+        return
+    end
+
+    -- Set initial animation
+    holo:setSequence(startFrame.sequence)
+    holo:setCycle(startFrame.cycle)
+
+    -- Store clone data
+    local cloneData = {
+        holo = holo,
+        recording = recordingCopy,
+        startTime = timer.curtime(),
+        currentFrame = 1,
+        totalFrames = #recordingCopy
+    }
+
+    table.insert(clones, cloneData)
+
+    print("[Clone] Spawned clone #" .. #clones .. " with " .. #recordingCopy .. " frames (" .. string.format("%.1f", recordingCopy[#recordingCopy].time) .. " seconds)")
+end
+
+-- Remove the last spawned clone
+local function removeLastClone()
+    if #clones == 0 then
+        print("[Clone] No clones to remove!")
+        return
+    end
+
+    local lastClone = table.remove(clones)
+    if lastClone.holo:isValid() then
+        lastClone.holo:remove()
+    end
+
+    print("[Clone] Removed clone. " .. #clones .. " clones remaining.")
+end
+
+-- Update all clones
+hook.add("think", "update_clones", function()
+    for i = #clones, 1, -1 do
+        local clone = clones[i]
+
+        if not clone.holo:isValid() then
+            table.remove(clones, i)
+        else
+            local elapsed = timer.curtime() - clone.startTime
+            local totalDuration = clone.recording[clone.totalFrames].time
+
+            -- Loop the recording
+            if totalDuration > 0 then
+                elapsed = elapsed % totalDuration
+            end
+
+            -- Find the appropriate frame based on elapsed time
+            local targetFrame = 1
+            for j = 1, clone.totalFrames do
+                if clone.recording[j].time <= elapsed then
+                    targetFrame = j
+                else
+                    break
+                end
+            end
+
+            -- Apply the frame data
+            local frame = clone.recording[targetFrame]
+            clone.holo:setPos(frame.pos)
+            clone.holo:setAngles(frame.ang)
+
+            -- Update animation
+            if clone.currentFrame ~= targetFrame then
+                clone.holo:setSequence(frame.sequence)
+                clone.currentFrame = targetFrame
+            end
+            clone.holo:setCycle(frame.cycle)
+        end
+    end
+end)
+
+-- Key input
+hook.add("inputPressed", "clone_controls", function(key)
+    if key == KEY.PAD_1 then
+        spawnClone()
+    elseif key == KEY.PAD_2 then
+        removeLastClone()
+    end
+end)
+
+-- HUD
+hook.add("postdrawhud", "clone_hud", function()
+    render.setColor(Color(255, 255, 255))
+    render.drawSimpleText(10, 50, "MOVEMENT RECORDER & CLONER", "DermaLarge")
+
+    render.setColor(Color(0, 255, 0))
+    render.drawSimpleText(10, 80, "Recording: " .. (isRecording and "YES" or "NO"), "DermaDefault")
+
+    render.setColor(Color(255, 255, 255))
+    render.drawSimpleText(10, 100, "Frames recorded: " .. #recording, "DermaDefault")
+
+    if #recording > 0 then
+        local duration = recording[#recording].time
+        render.drawSimpleText(10, 120, "Duration: " .. string.format("%.1f", duration) .. "s", "DermaDefault")
+    end
+
+    render.drawSimpleText(10, 140, "Active clones: " .. #clones, "DermaDefault")
+
+    render.drawSimpleText(10, 170, "Numpad 1: Spawn Clone", "DermaDefault")
+    render.drawSimpleText(10, 190, "Numpad 2: Remove Last Clone", "DermaDefault")
+end)
+
+print("[Movement Recorder] Loaded! Recording started.")
+print("[Movement Recorder] Numpad 1: Spawn clone | Numpad 2: Remove last clone")
