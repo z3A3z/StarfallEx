@@ -16,11 +16,31 @@ if SERVER then
     local recordingStartTime = timer.curtime()
     local clones = {}
 
-    -- Receive frame data from client
-    net.receive("recordFrame", function(len, ply)
-        local frameData = net.readTable()
-        frameData.time = timer.curtime() - recordingStartTime
-        table.insert(recording, frameData)
+    -- Record owner's movement on server (no net messages needed!)
+    hook.add("think", "record_movement", function()
+        local ply = owner()
+        if not ply:isValid() then return end
+
+        -- Get body angles (only yaw)
+        local bodyAng = ply:getAngles()
+        local bodyYaw = Angle(0, bodyAng.y, 0)
+
+        -- Get animation and pose data
+        local seqID = ply:getSequence()
+        local moveX = ply:getPose("move_x")
+        local moveY = ply:getPose("move_y")
+
+        local frame = {
+            pos = ply:getPos(),
+            ang = bodyYaw,
+            seq = seqID,
+            moveX = moveX,
+            moveY = moveY,
+            model = ply:getModel(),
+            time = timer.curtime() - recordingStartTime
+        }
+
+        table.insert(recording, frame)
     end)
 
     -- Spawn a clone
@@ -139,41 +159,7 @@ if SERVER then
 end
 
 if CLIENT then
-    -- Client: Record player data and send to server (throttled)
-    local nextSendTime = 0
-    local sendInterval = 0.05  -- Send 20 times per second
-
-    hook.add("think", "record_movement", function()
-        local ply = player()
-        if not ply:isValid() then return end
-
-        -- Throttle net messages to avoid burst limit
-        if timer.curtime() < nextSendTime then return end
-        nextSendTime = timer.curtime() + sendInterval
-
-        -- Get body angles (only yaw)
-        local bodyAng = ply:getAngles()
-        local bodyYaw = Angle(0, bodyAng.y, 0)
-
-        -- Get animation and pose data
-        local seqID = ply:getSequence()
-        local moveX = ply:getPose("move_x")
-        local moveY = ply:getPose("move_y")
-
-        -- Send frame data to server
-        net.start("recordFrame")
-        net.writeTable({
-            pos = ply:getPos(),
-            ang = bodyYaw,
-            seq = seqID,
-            moveX = moveX,
-            moveY = moveY,
-            model = ply:getModel()
-        })
-        net.send()
-    end)
-
-    -- Client: Input detection
+    -- Client: Input detection only
     hook.add("inputPressed", "clone_controls", function(key)
         if key == KEY.PAD_1 then
             net.start("spawnClone")
