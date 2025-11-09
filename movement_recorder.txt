@@ -146,12 +146,17 @@ hook.add("think", "update_clones", function()
             clone.holo:setPos(frame.pos)
             clone.holo:setAngles(frame.ang)
 
-            -- Always set the exact animation sequence and frame from recording
-            -- Rate 0 ensures no automatic frame advancement
-            clone.holo:setAnimation(frame.seqName, frame.animProgress, 0)
+            -- Update animation: only reset sequence when it changes
+            if clone.currentSeq ~= frame.seqName then
+                -- New sequence - reset with rate 0 to disable auto-advance
+                clone.holo:setAnimation(frame.seqName, frame.animProgress, 0)
+                clone.currentSeq = frame.seqName
+            else
+                -- Same sequence - just update the cycle/frame position
+                clone.holo:setAnimation(nil, frame.animProgress, nil)
+            end
 
             clone.currentFrame = targetFrame
-            clone.currentSeq = frame.seqName
         end
     end
 end)
