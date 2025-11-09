@@ -51,14 +51,15 @@ local skyboxAngles = {
 
 -- Skybox matrices
 local skyboxMatrices = {}
+local boxCenter = nil
 
--- Update skybox matrices based on viewer position (for proper skybox effect)
-local function updateSkyboxMatrices()
-    local pos = render.getEyePos()
+-- Initialize skybox matrices based on box center (FIXED position, not viewer)
+local function initializeSkyboxMatrices()
+    if not boxCenter then return end
 
     for i = 1, 6 do
         skyboxMatrices[i] = Matrix()
-        skyboxMatrices[i]:translate(pos)
+        skyboxMatrices[i]:translate(boxCenter)
         skyboxMatrices[i]:rotate(skyboxAngles[i])
         skyboxMatrices[i]:scale(Vector(scale, scale, scale))
         skyboxMatrices[i]:translate(Vector(-0.5, -0.5, 0.5))
@@ -103,6 +104,10 @@ local function createScreenBox()
     local width = size.x
     local height = size.y
     local depth = size.z
+
+    -- Set box center and initialize skybox matrices (FIXED position)
+    boxCenter = center
+    initializeSkyboxMatrices()
 
     -- Screen configurations (facing inward)
     -- Each screen maps to a specific skybox face
@@ -169,13 +174,11 @@ end)
 hook.add("renderoffscreen", "screenbox_render", function()
     if not screensReady then return end
 
-    -- Update skybox matrices to follow viewer
-    updateSkyboxMatrices()
-
     -- Calculate bloom value
     local val = math.abs(math.sin(timer.curtime() * 0.05))
 
     -- Render each skybox face to its own render target
+    -- The skybox is centered on the box center (FIXED), not the viewer
     for i = 1, 6 do
         render.selectRenderTarget(renderTargets[i])
         render.clear(Color(0, 0, 0, 255))
