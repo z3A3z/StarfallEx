@@ -17,16 +17,6 @@ local recordingStartTime = timer.curtime()
 
 -- Clone management
 local clones = {}
-local clonePlaybackData = {}
-
--- Helper function to copy table
-local function copyTable(t)
-    local copy = {}
-    for k, v in pairs(t) do
-        copy[k] = v
-    end
-    return copy
-end
 
 -- Record player data every frame
 hook.add("think", "record_movement", function()
@@ -37,10 +27,10 @@ hook.add("think", "record_movement", function()
 
     local frame = {
         pos = ply:getPos(),
-        ang = ply:getEyeAngles(),
+        ang = ply:getAngles(),
         vel = ply:getVelocity(),
         sequence = ply:getSequence(),
-        cycle = ply:getCycle(),
+        progress = ply:getAnimationProgress(),
         model = ply:getModel(),
         time = timer.curtime() - recordingStartTime
     }
@@ -61,9 +51,8 @@ local function spawnClone()
         recordingCopy[i] = {
             pos = Vector(frame.pos.x, frame.pos.y, frame.pos.z),
             ang = Angle(frame.ang.p, frame.ang.y, frame.ang.r),
-            vel = Vector(frame.vel.x, frame.vel.y, frame.vel.z),
             sequence = frame.sequence,
-            cycle = frame.cycle,
+            progress = frame.progress,
             model = frame.model,
             time = frame.time
         }
@@ -86,8 +75,7 @@ local function spawnClone()
     end
 
     -- Set initial animation
-    holo:setSequence(startFrame.sequence)
-    holo:setCycle(startFrame.cycle)
+    holo:setAnimation(startFrame.sequence, startFrame.progress, 1)
 
     -- Store clone data
     local cloneData = {
@@ -151,10 +139,9 @@ hook.add("think", "update_clones", function()
 
             -- Update animation
             if clone.currentFrame ~= targetFrame then
-                clone.holo:setSequence(frame.sequence)
+                clone.holo:setAnimation(frame.sequence, frame.progress, 1)
                 clone.currentFrame = targetFrame
             end
-            clone.holo:setCycle(frame.cycle)
         end
     end
 end)
@@ -166,28 +153,6 @@ hook.add("inputPressed", "clone_controls", function(key)
     elseif key == KEY.PAD_2 then
         removeLastClone()
     end
-end)
-
--- HUD
-hook.add("postdrawhud", "clone_hud", function()
-    render.setColor(Color(255, 255, 255))
-    render.drawSimpleText(10, 50, "MOVEMENT RECORDER & CLONER", "DermaLarge")
-
-    render.setColor(Color(0, 255, 0))
-    render.drawSimpleText(10, 80, "Recording: " .. (isRecording and "YES" or "NO"), "DermaDefault")
-
-    render.setColor(Color(255, 255, 255))
-    render.drawSimpleText(10, 100, "Frames recorded: " .. #recording, "DermaDefault")
-
-    if #recording > 0 then
-        local duration = recording[#recording].time
-        render.drawSimpleText(10, 120, "Duration: " .. string.format("%.1f", duration) .. "s", "DermaDefault")
-    end
-
-    render.drawSimpleText(10, 140, "Active clones: " .. #clones, "DermaDefault")
-
-    render.drawSimpleText(10, 170, "Numpad 1: Spawn Clone", "DermaDefault")
-    render.drawSimpleText(10, 190, "Numpad 2: Remove Last Clone", "DermaDefault")
 end)
 
 print("[Movement Recorder] Loaded! Recording started.")
