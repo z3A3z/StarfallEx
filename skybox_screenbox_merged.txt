@@ -8,10 +8,10 @@
     NUMPAD 3: Create screen box with skybox
 
     This merges the numpad screen creation with correct skybox rendering.
-    Uses the same rendering technique as the working screen code:
-    - All 6 holograms share ONE render target (like screens linked to one chip)
-    - All 6 skybox faces rendered with 3D transforms to that single target
-    - Each hologram shows the skybox from its position/angle in 3D space
+    Each wall is mapped to the correct skybox direction:
+    - 6 render targets (one per skybox face direction)
+    - Each hologram displays the skybox face matching the direction it's facing
+    - Wall at +Y shows +Y skybox, wall at -X shows -X skybox, etc.
 ]]
 
 local point1 = nil
@@ -19,11 +19,17 @@ local point2 = nil
 local screenHolos = {}
 local screensReady = false
 
--- Create ONE render target (all holograms share it, like screens share the chip's render)
-render.createRenderTarget("screenbox_skybox")
+-- Create 6 render targets, one per wall direction
+local renderTargets = {}
+local materials = {}
+for i = 1, 6 do
+    local rtName = "screenbox_face_" .. i
+    render.createRenderTarget(rtName)
+    renderTargets[i] = rtName
 
-local skyboxMat = material.create("VertexLitGeneric")
-skyboxMat:setTextureRenderTarget("$basetexture", "screenbox_skybox")
+    materials[i] = material.create("VertexLitGeneric")
+    materials[i]:setTextureRenderTarget("$basetexture", rtName)
+end
 
 -- Skybox textures (matching the working code)
 local scale = 200000
@@ -107,14 +113,20 @@ local function createScreenBox()
     initializeSkyboxMatrices()
 
     -- Screen configurations (facing inward)
-    -- All use the same material/render target (like screens linked to same chip)
+    -- Each wall maps to the skybox direction it's facing:
+    -- Wall at Y+ shows skybox +Y (py.png = texture 5, angle 5)
+    -- Wall at X+ shows skybox +X (px.png = texture 4, angle 4)
+    -- Wall at Y- shows skybox -Y (ny.png = texture 6, angle 6)
+    -- Wall at X- shows skybox -X (nx.png = texture 2, angle 2)
+    -- Wall at Z+ shows skybox +Z (pz.png = texture 1, angle 1)
+    -- Wall at Z- shows skybox -Z (nz.png = texture 3, angle 3)
     local screens = {
-        {pos = Vector(0, height/2, 0),    ang = Angle(0, 180, 90),  size = Vector(width/48, depth/48, 0.1)},   -- Front
-        {pos = Vector(width/2, 0, 0),     ang = Angle(0, -90, 90),  size = Vector(height/48, depth/48, 0.1)},  -- Right
-        {pos = Vector(0, -height/2, 0),   ang = Angle(0, 0, 90),    size = Vector(width/48, depth/48, 0.1)},   -- Back
-        {pos = Vector(-width/2, 0, 0),    ang = Angle(0, 90, 90),   size = Vector(height/48, depth/48, 0.1)},  -- Left
-        {pos = Vector(0, 0, depth/2),     ang = Angle(0, 180, 180), size = Vector(width/48, height/48, 0.1)},  -- Top
-        {pos = Vector(0, 0, -depth/2),    ang = Angle(0, 180, 0),   size = Vector(width/48, height/48, 0.1)}   -- Bottom
+        {pos = Vector(0, height/2, 0),    ang = Angle(0, 180, 90),  size = Vector(width/48, depth/48, 0.1),   skyboxFace = 5},  -- Front (+Y)
+        {pos = Vector(width/2, 0, 0),     ang = Angle(0, -90, 90),  size = Vector(height/48, depth/48, 0.1),  skyboxFace = 4},  -- Right (+X)
+        {pos = Vector(0, -height/2, 0),   ang = Angle(0, 0, 90),    size = Vector(width/48, depth/48, 0.1),   skyboxFace = 6},  -- Back (-Y)
+        {pos = Vector(-width/2, 0, 0),    ang = Angle(0, 90, 90),   size = Vector(height/48, depth/48, 0.1),  skyboxFace = 2},  -- Left (-X)
+        {pos = Vector(0, 0, depth/2),     ang = Angle(0, 180, 180), size = Vector(width/48, height/48, 0.1),  skyboxFace = 1},  -- Top (+Z)
+        {pos = Vector(0, 0, -depth/2),    ang = Angle(0, 180, 0),   size = Vector(width/48, height/48, 0.1),  skyboxFace = 3}   -- Bottom (-Z)
     }
 
     -- Create holograms using plate1x1 model
@@ -127,8 +139,8 @@ local function createScreenBox()
         )
 
         holo:suppressEngineLighting(true)
-        -- All holograms share the same render target (like screens linked to same chip)
-        holo:setMaterial("!" .. skyboxMat:getName())
+        -- Each hologram gets the material for its corresponding skybox face
+        holo:setMaterial("!" .. materials[screen.skyboxFace]:getName())
 
         table.insert(screenHolos, holo)
     end
@@ -167,20 +179,19 @@ hook.add("inputPressed", "screenbox_keys", function(key)
     end
 end)
 
--- Render all 6 skybox faces to ONE render target (like the working screen code)
+-- Render each skybox face to its corresponding render target
 hook.add("renderoffscreen", "screenbox_render", function()
     if not screensReady then return end
-
-    -- Select the single shared render target
-    render.selectRenderTarget("screenbox_skybox")
-    render.clear(Color(0, 0, 0, 255))
 
     -- Calculate bloom value
     local val = math.abs(math.sin(timer.curtime() * 0.05))
 
-    -- Render ALL 6 skybox faces with 3D transforms (SAME as working code!)
-    -- The skybox is centered on the box center (FIXED position)
+    -- Render each skybox face to its own render target
+    -- Face index matches the skybox texture/angle index
     for i = 1, 6 do
+        render.selectRenderTarget(renderTargets[i])
+        render.clear(Color(0, 0, 0, 255))
+
         render.pushViewMatrix({type = "3D", zfar = 300000})
         render.pushMatrix(skyboxMatrices[i], true)
         render.setMaterial(skyboxTextures[i])
