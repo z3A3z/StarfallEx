@@ -56,8 +56,7 @@ local function spawnClone()
         recordingCopy[i] = {
             pos = Vector(frame.pos.x, frame.pos.y, frame.pos.z),
             ang = Angle(frame.ang.p, frame.ang.y, frame.ang.r),
-            seqName = frame.seqName,
-            animProgress = frame.animProgress,
+            seq = frame.seq,
             model = frame.model,
             time = frame.time
         }
