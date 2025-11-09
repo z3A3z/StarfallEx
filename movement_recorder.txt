@@ -32,10 +32,16 @@ hook.add("think", "record_movement", function()
     -- Get the actual animation sequence from the player
     local seqID = ply:getSequence()
 
+    -- Get pose parameters for movement
+    local moveX = ply:getPose("move_x")
+    local moveY = ply:getPose("move_y")
+
     local frame = {
         pos = ply:getPos(),
         ang = bodyYaw,
         seq = seqID,
+        moveX = moveX,
+        moveY = moveY,
         model = ply:getModel(),
         time = timer.curtime() - recordingStartTime
     }
@@ -57,6 +63,8 @@ local function spawnClone()
             pos = Vector(frame.pos.x, frame.pos.y, frame.pos.z),
             ang = Angle(frame.ang.p, frame.ang.y, frame.ang.r),
             seq = frame.seq,
+            moveX = frame.moveX,
+            moveY = frame.moveY,
             model = frame.model,
             time = frame.time
         }
@@ -80,6 +88,10 @@ local function spawnClone()
 
     -- Set initial animation and let it play naturally
     holo:setAnimation(startFrame.seq, 0, 1)
+
+    -- Set initial pose parameters
+    holo:setPose("move_x", startFrame.moveX)
+    holo:setPose("move_y", startFrame.moveY)
 
     -- Store clone data
     local cloneData = {
@@ -146,6 +158,10 @@ hook.add("think", "update_clones", function()
             local frame = clone.recording[targetFrame]
             clone.holo:setPos(frame.pos)
             clone.holo:setAngles(frame.ang)
+
+            -- Set pose parameters for leg movement
+            clone.holo:setPose("move_x", frame.moveX)
+            clone.holo:setPose("move_y", frame.moveY)
 
             -- Only change animation when sequence changes - let it play naturally
             if clone.currentSeq ~= frame.seq then
