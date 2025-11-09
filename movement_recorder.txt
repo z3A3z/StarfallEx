@@ -98,6 +98,11 @@ local function spawnClone()
     table.insert(clones, cloneData)
 
     print("[Clone] Spawned clone #" .. #clones .. " with " .. #recordingCopy .. " frames (" .. string.format("%.1f", recordingCopy[#recordingCopy].time) .. " seconds)")
+
+    -- Reset recording for next clone
+    recording = {}
+    recordingStartTime = timer.curtime()
+    print("[Clone] Recording reset - starting new recording")
 end
 
 -- Remove the last spawned clone
@@ -146,14 +151,13 @@ hook.add("think", "update_clones", function()
             clone.holo:setPos(frame.pos)
             clone.holo:setAngles(frame.ang)
 
-            -- Update animation: only reset sequence when it changes
+            -- Update animation - must always pass sequence name (can't be nil)
+            -- Set rate to 0 only when sequence changes to avoid resetting playback rate
             if clone.currentSeq ~= frame.seqName then
-                -- New sequence - reset with rate 0 to disable auto-advance
                 clone.holo:setAnimation(frame.seqName, frame.animProgress, 0)
                 clone.currentSeq = frame.seqName
             else
-                -- Same sequence - just update the cycle/frame position
-                clone.holo:setAnimation(nil, frame.animProgress, nil)
+                clone.holo:setAnimation(frame.seqName, frame.animProgress)
             end
 
             clone.currentFrame = targetFrame
