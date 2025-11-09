@@ -7,11 +7,12 @@
     NUMPAD 2: Set second corner point
     NUMPAD 3: Create screen box with skybox
 
-    This merges the numpad screen creation with correct skybox rendering.
-    Each wall is mapped to the correct skybox direction:
-    - 6 render targets (one per skybox face direction)
-    - Each hologram displays the skybox face matching the direction it's facing
-    - Wall at +Y shows +Y skybox, wall at -X shows -X skybox, etc.
+    This merges the numpad screen creation with VIEW-DEPENDENT skybox rendering.
+    Works just like screen entities:
+    - Skybox updates based on your camera position (render.getEyePos())
+    - As you move and look around, the skybox adjusts in real-time
+    - 6 render targets (one per skybox direction)
+    - Each hologram displays the skybox face for its direction
 ]]
 
 local point1 = nil
@@ -54,15 +55,14 @@ local skyboxAngles = {
 
 -- Skybox matrices
 local skyboxMatrices = {}
-local boxCenter = nil
 
--- Initialize skybox matrices based on box center (FIXED position, not viewer)
-local function initializeSkyboxMatrices()
-    if not boxCenter then return end
+-- Update skybox matrices based on viewer position (view-dependent like screens!)
+local function updateSkyboxMatrices()
+    local pos = render.getEyePos()
 
     for i = 1, 6 do
         skyboxMatrices[i] = Matrix()
-        skyboxMatrices[i]:translate(boxCenter)
+        skyboxMatrices[i]:translate(pos)
         skyboxMatrices[i]:rotate(skyboxAngles[i])
         skyboxMatrices[i]:scale(Vector(scale, scale, scale))
         skyboxMatrices[i]:translate(Vector(-0.5, -0.5, 0.5))
@@ -107,10 +107,6 @@ local function createScreenBox()
     local width = size.x
     local height = size.y
     local depth = size.z
-
-    -- Set box center and initialize skybox matrices (FIXED position at box center)
-    boxCenter = center
-    initializeSkyboxMatrices()
 
     -- Screen configurations (ALL FACING INWARD)
     -- For plate1x1 model, Angle(0,90,180) means plate faces +X direction
@@ -175,8 +171,12 @@ hook.add("inputPressed", "screenbox_keys", function(key)
 end)
 
 -- Render each skybox face to its corresponding render target
+-- Updates every frame based on camera view (VIEW-DEPENDENT like screens!)
 hook.add("renderoffscreen", "screenbox_render", function()
     if not screensReady then return end
+
+    -- Update skybox matrices based on current eye position (like screens do!)
+    updateSkyboxMatrices()
 
     -- Calculate bloom value
     local val = math.abs(math.sin(timer.curtime() * 0.05))
