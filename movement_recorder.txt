@@ -56,22 +56,8 @@ local function spawnClone()
         return
     end
 
-    -- Make a copy of the current recording
-    local recordingCopy = {}
-    for i, frame in ipairs(recording) do
-        recordingCopy[i] = {
-            pos = Vector(frame.pos.x, frame.pos.y, frame.pos.z),
-            ang = Angle(frame.ang.p, frame.ang.y, frame.ang.r),
-            seq = frame.seq,
-            moveX = frame.moveX,
-            moveY = frame.moveY,
-            model = frame.model,
-            time = frame.time
-        }
-    end
-
     -- Get starting frame data
-    local startFrame = recordingCopy[1]
+    local startFrame = recording[1]
 
     -- Create hologram
     local holo = holograms.create(
@@ -93,19 +79,17 @@ local function spawnClone()
     holo:setPose("move_x", startFrame.moveX)
     holo:setPose("move_y", startFrame.moveY)
 
-    -- Store clone data
+    -- Store clone data - all clones share the same recording reference
     local cloneData = {
         holo = holo,
-        recording = recordingCopy,
         startTime = timer.curtime(),
         currentFrame = 1,
-        currentSeq = startFrame.seq,
-        totalFrames = #recordingCopy
+        currentSeq = startFrame.seq
     }
 
     table.insert(clones, cloneData)
 
-    print("[Clone] Spawned clone #" .. #clones .. " with " .. #recordingCopy .. " frames (" .. string.format("%.1f", recordingCopy[#recordingCopy].time) .. " seconds)")
+    print("[Clone] Spawned clone #" .. #clones .. " (using live recording with " .. #recording .. " frames)")
 end
 
 -- Remove the last spawned clone
@@ -125,6 +109,8 @@ end
 
 -- Update all clones
 hook.add("think", "update_clones", function()
+    if #recording == 0 then return end
+
     for i = #clones, 1, -1 do
         local clone = clones[i]
 
@@ -132,7 +118,8 @@ hook.add("think", "update_clones", function()
             table.remove(clones, i)
         else
             local elapsed = timer.curtime() - clone.startTime
-            local totalDuration = clone.recording[clone.totalFrames].time
+            local totalFrames = #recording
+            local totalDuration = recording[totalFrames].time
 
             -- Loop the recording infinitely
             if totalDuration > 0 then
@@ -141,8 +128,8 @@ hook.add("think", "update_clones", function()
 
             -- Find the appropriate frame based on elapsed time
             local targetFrame = 1
-            for j = 1, clone.totalFrames do
-                if clone.recording[j].time <= elapsed then
+            for j = 1, totalFrames do
+                if recording[j].time <= elapsed then
                     targetFrame = j
                 else
                     break
@@ -150,7 +137,7 @@ hook.add("think", "update_clones", function()
             end
 
             -- Apply the frame data
-            local frame = clone.recording[targetFrame]
+            local frame = recording[targetFrame]
             clone.holo:setPos(frame.pos)
             clone.holo:setAngles(frame.ang)
 
