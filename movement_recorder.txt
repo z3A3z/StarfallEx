@@ -15,11 +15,18 @@ if SERVER then
     local recording = {}
     local recordingStartTime = timer.curtime()
     local clones = {}
+    local nextRecordTime = 0
+    local recordInterval = 0.05  -- Record at 20 fps to save CPU
 
-    -- Record owner's movement on server (no net messages needed!)
+    -- Record owner's movement on server (throttled to save CPU)
     hook.add("think", "record_movement", function()
         local ply = owner()
         if not ply:isValid() then return end
+
+        -- Throttle recording to reduce CPU usage
+        local curTime = timer.curtime()
+        if curTime < nextRecordTime then return end
+        nextRecordTime = curTime + recordInterval
 
         -- Get body angles (only yaw)
         local bodyAng = ply:getAngles()
@@ -37,7 +44,7 @@ if SERVER then
             moveX = moveX,
             moveY = moveY,
             model = ply:getModel(),
-            time = timer.curtime() - recordingStartTime
+            time = curTime - recordingStartTime
         }
 
         table.insert(recording, frame)
@@ -133,15 +140,31 @@ if SERVER then
                     elapsed = elapsed % totalDuration
                 end
 
-                -- Find the appropriate frame based on elapsed time
-                local targetFrame = 1
-                for j = 1, totalFrames do
-                    if recording[j].time <= elapsed then
-                        targetFrame = j
-                    else
+                -- Find frame - start from last frame to avoid full linear search
+                local targetFrame = clone.currentFrame or 1
+
+                -- Search forward from last frame
+                for j = targetFrame, totalFrames do
+                    if recording[j].time > elapsed then
+                        targetFrame = j - 1
                         break
                     end
+                    targetFrame = j
                 end
+
+                -- Handle loop wrap-around (when time resets)
+                if elapsed < recording[targetFrame].time then
+                    targetFrame = 1
+                    for j = 1, totalFrames do
+                        if recording[j].time > elapsed then
+                            targetFrame = j - 1
+                            break
+                        end
+                        targetFrame = j
+                    end
+                end
+
+                if targetFrame < 1 then targetFrame = 1 end
 
                 -- Apply the frame data
                 local frame = recording[targetFrame]
