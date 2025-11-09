@@ -82,8 +82,8 @@ local function spawnClone()
         return
     end
 
-    -- Set initial animation using the actual sequence name and progress
-    holo:setAnimation(startFrame.seqName, startFrame.animProgress, 1)
+    -- Set initial animation using the actual sequence name and progress (rate 0 = no auto-advance)
+    holo:setAnimation(startFrame.seqName, startFrame.animProgress, 0)
 
     -- Store clone data
     local cloneData = {
@@ -146,13 +146,12 @@ hook.add("think", "update_clones", function()
             clone.holo:setPos(frame.pos)
             clone.holo:setAngles(frame.ang)
 
-            -- Update animation when sequence changes
-            if clone.currentSeq ~= frame.seqName then
-                clone.holo:setAnimation(frame.seqName, frame.animProgress, 1)
-                clone.currentSeq = frame.seqName
-            end
+            -- Always set the exact animation sequence and frame from recording
+            -- Rate 0 ensures no automatic frame advancement
+            clone.holo:setAnimation(frame.seqName, frame.animProgress, 0)
 
             clone.currentFrame = targetFrame
+            clone.currentSeq = frame.seqName
         end
     end
 end)
