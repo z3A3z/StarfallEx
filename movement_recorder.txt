@@ -45,6 +45,9 @@ if SERVER then
 
     -- Spawn a clone
     net.receive("spawnClone", function(len, ply)
+        -- Only allow the chip owner to spawn clones
+        if ply ~= owner() then return end
+
         if #recording == 0 then
             net.start("cloneMessage")
             net.writeString("[Clone] No recording data available!")
@@ -91,6 +94,9 @@ if SERVER then
 
     -- Remove last clone
     net.receive("removeClone", function(len, ply)
+        -- Only allow the chip owner to remove clones
+        if ply ~= owner() then return end
+
         if #clones == 0 then
             net.start("cloneMessage")
             net.writeString("[Clone] No clones to remove!")
