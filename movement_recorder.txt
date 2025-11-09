@@ -18,6 +18,9 @@ local recordingStartTime = timer.curtime()
 -- Clone management
 local clones = {}
 
+-- Animation sequence cache (populated after first hologram is created)
+local animSeqCache = nil
+
 -- Record player data every frame
 hook.add("think", "record_movement", function()
     if not isRecording then return end
@@ -29,13 +32,22 @@ hook.add("think", "record_movement", function()
     local bodyAng = ply:getAngles()
     local bodyYaw = Angle(0, bodyAng.y, 0)
 
-    -- Get the actual sequence name the player is using
-    local seqName = ply:getSequenceName(ply:getSequence())
+    -- Calculate movement speed for animation
+    local vel = ply:getVelocity()
+    local speed = Vector(vel.x, vel.y, 0):getLength()
+
+    -- Determine animation state based on speed
+    local animState = "idle"
+    if speed > 200 then
+        animState = "run"
+    elseif speed > 10 then
+        animState = "walk"
+    end
 
     local frame = {
         pos = ply:getPos(),
         ang = bodyYaw,
-        seqName = seqName,
+        animState = animState,
         model = ply:getModel(),
         time = timer.curtime() - recordingStartTime
     }
@@ -56,7 +68,7 @@ local function spawnClone()
         recordingCopy[i] = {
             pos = Vector(frame.pos.x, frame.pos.y, frame.pos.z),
             ang = Angle(frame.ang.p, frame.ang.y, frame.ang.r),
-            seqName = frame.seqName,
+            animState = frame.animState,
             model = frame.model,
             time = frame.time
         }
@@ -78,8 +90,18 @@ local function spawnClone()
         return
     end
 
-    -- Set initial animation
-    holo:setAnimation(startFrame.seqName)
+    -- Build animation sequence cache if not done yet
+    if not animSeqCache then
+        animSeqCache = {
+            idle = holo:lookupSequence("idle_all") or holo:lookupSequence("idle") or 0,
+            walk = holo:lookupSequence("walk_all") or holo:lookupSequence("walk") or 4,
+            run = holo:lookupSequence("run_all") or holo:lookupSequence("run") or 5
+        }
+        print("[Clone] Animation sequences: idle=" .. animSeqCache.idle .. " walk=" .. animSeqCache.walk .. " run=" .. animSeqCache.run)
+    end
+
+    -- Set initial animation using the cached sequence ID
+    holo:setAnimation(animSeqCache[startFrame.animState])
 
     -- Store clone data
     local cloneData = {
@@ -87,7 +109,7 @@ local function spawnClone()
         recording = recordingCopy,
         startTime = timer.curtime(),
         currentFrame = 1,
-        currentSeq = startFrame.seqName,
+        currentState = startFrame.animState,
         totalFrames = #recordingCopy
     }
 
@@ -142,10 +164,10 @@ hook.add("think", "update_clones", function()
             clone.holo:setPos(frame.pos)
             clone.holo:setAngles(frame.ang)
 
-            -- Update animation only when sequence changes
-            if clone.currentSeq ~= frame.seqName then
-                clone.holo:setAnimation(frame.seqName)
-                clone.currentSeq = frame.seqName
+            -- Update animation only when state changes (idle/walk/run)
+            if clone.currentState ~= frame.animState then
+                clone.holo:setAnimation(animSeqCache[frame.animState])
+                clone.currentState = frame.animState
             end
 
             clone.currentFrame = targetFrame
