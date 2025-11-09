@@ -92,16 +92,23 @@ local function spawnClone()
 
     -- Build animation sequence cache if not done yet
     if not animSeqCache then
+        -- List all sequences to see what's available
+        local seqList = holo:getSequenceList()
+        print("[Clone] Available sequences on " .. startFrame.model .. ":")
+        for k, v in pairs(seqList) do
+            print("  [" .. k .. "] = " .. v)
+        end
+
         animSeqCache = {
-            idle = holo:lookupSequence("idle_all") or holo:lookupSequence("idle") or 0,
-            walk = holo:lookupSequence("walk_all") or holo:lookupSequence("walk") or 4,
-            run = holo:lookupSequence("run_all") or holo:lookupSequence("run") or 5
+            idle = holo:lookupSequence("idle_all"),
+            walk = holo:lookupSequence("walk_all"),
+            run = holo:lookupSequence("run_all")
         }
-        print("[Clone] Animation sequences: idle=" .. animSeqCache.idle .. " walk=" .. animSeqCache.walk .. " run=" .. animSeqCache.run)
+        print("[Clone] Using sequences: idle=" .. animSeqCache.idle .. " walk=" .. animSeqCache.walk .. " run=" .. animSeqCache.run)
     end
 
-    -- Set initial animation using the cached sequence ID
-    holo:setAnimation(animSeqCache[startFrame.animState])
+    -- Set initial animation using the string name, not sequence ID
+    holo:setAnimation(startFrame.animState .. "_all")
 
     -- Store clone data
     local cloneData = {
@@ -166,7 +173,7 @@ hook.add("think", "update_clones", function()
 
             -- Update animation only when state changes (idle/walk/run)
             if clone.currentState ~= frame.animState then
-                clone.holo:setAnimation(animSeqCache[frame.animState])
+                clone.holo:setAnimation(frame.animState .. "_all")
                 clone.currentState = frame.animState
             end
 
