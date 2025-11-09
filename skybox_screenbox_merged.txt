@@ -112,21 +112,16 @@ local function createScreenBox()
     boxCenter = center
     initializeSkyboxMatrices()
 
-    -- Screen configurations (facing inward)
-    -- Each wall maps to the skybox direction it's facing:
-    -- Wall at Y+ shows skybox +Y (py.png = texture 5, angle 5)
-    -- Wall at X+ shows skybox +X (px.png = texture 4, angle 4)
-    -- Wall at Y- shows skybox -Y (ny.png = texture 6, angle 6)
-    -- Wall at X- shows skybox -X (nx.png = texture 2, angle 2)
-    -- Wall at Z+ shows skybox +Z (pz.png = texture 1, angle 1)
-    -- Wall at Z- shows skybox -Z (nz.png = texture 3, angle 3)
+    -- Screen configurations (ALL FACING INWARD)
+    -- For plate1x1 model, Angle(0,90,180) means plate faces +X direction
+    -- So we rotate each wall to face the box center
     local screens = {
-        {pos = Vector(0, height/2, 0),    ang = Angle(0, 180, 90),  size = Vector(width/48, depth/48, 0.1),   skyboxFace = 5},  -- Front (+Y)
-        {pos = Vector(width/2, 0, 0),     ang = Angle(0, -90, 90),  size = Vector(height/48, depth/48, 0.1),  skyboxFace = 4},  -- Right (+X)
-        {pos = Vector(0, -height/2, 0),   ang = Angle(0, 0, 90),    size = Vector(width/48, depth/48, 0.1),   skyboxFace = 6},  -- Back (-Y)
-        {pos = Vector(-width/2, 0, 0),    ang = Angle(0, 90, 90),   size = Vector(height/48, depth/48, 0.1),  skyboxFace = 2},  -- Left (-X)
-        {pos = Vector(0, 0, depth/2),     ang = Angle(0, 180, 180), size = Vector(width/48, height/48, 0.1),  skyboxFace = 1},  -- Top (+Z)
-        {pos = Vector(0, 0, -depth/2),    ang = Angle(0, 180, 0),   size = Vector(width/48, height/48, 0.1),  skyboxFace = 3}   -- Bottom (-Z)
+        {pos = Vector(0, height/2, 0),    ang = Angle(0, -90, 90),  size = Vector(width/48, depth/48, 0.1),   skyboxFace = 6},  -- Front (Y+, faces -Y)
+        {pos = Vector(width/2, 0, 0),     ang = Angle(0, 180, 90),  size = Vector(height/48, depth/48, 0.1),  skyboxFace = 2},  -- Right (X+, faces -X)
+        {pos = Vector(0, -height/2, 0),   ang = Angle(0, 90, 90),   size = Vector(width/48, depth/48, 0.1),   skyboxFace = 5},  -- Back (Y-, faces +Y)
+        {pos = Vector(-width/2, 0, 0),    ang = Angle(0, 0, 90),    size = Vector(height/48, depth/48, 0.1),  skyboxFace = 4},  -- Left (X-, faces +X)
+        {pos = Vector(0, 0, depth/2),     ang = Angle(0, 0, 0),     size = Vector(width/48, height/48, 0.1),  skyboxFace = 3},  -- Top (Z+, faces -Z)
+        {pos = Vector(0, 0, -depth/2),    ang = Angle(0, 0, 180),   size = Vector(width/48, height/48, 0.1),  skyboxFace = 1}   -- Bottom (Z-, faces +Z)
     }
 
     -- Create holograms using plate1x1 model
