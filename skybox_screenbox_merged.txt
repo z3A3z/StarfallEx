@@ -1,0 +1,227 @@
+--@name Skybox Screen Box (Merged & Fixed)
+--@author
+--@client
+
+--[[
+    NUMPAD 1: Set first corner point
+    NUMPAD 2: Set second corner point
+    NUMPAD 3: Create screen box with skybox
+
+    This merges the numpad screen creation with correct skybox rendering.
+    Each wall of the box gets its own render target showing the correct skybox face.
+]]
+
+local point1 = nil
+local point2 = nil
+local screenHolos = {}
+local screensReady = false
+
+-- Create 6 render targets (one for each box face)
+local renderTargets = {}
+local materials = {}
+for i = 1, 6 do
+    local rtName = "screenbox_skybox_" .. i
+    render.createRenderTarget(rtName)
+    renderTargets[i] = rtName
+
+    materials[i] = material.create("VertexLitGeneric")
+    materials[i]:setTextureRenderTarget("$basetexture", rtName)
+end
+
+-- Skybox textures (matching the working code)
+local scale = 200000
+local skyboxTextures = {
+    render.createMaterial("https://raw.githubusercontent.com/ax255/public-stuff/refs/heads/main/star-skybox/pz.png"),
+    render.createMaterial("https://raw.githubusercontent.com/ax255/public-stuff/refs/heads/main/star-skybox/nx.png"),
+    render.createMaterial("https://raw.githubusercontent.com/ax255/public-stuff/refs/heads/main/star-skybox/nz.png"),
+    render.createMaterial("https://raw.githubusercontent.com/ax255/public-stuff/refs/heads/main/star-skybox/px.png"),
+    render.createMaterial("https://raw.githubusercontent.com/ax255/public-stuff/refs/heads/main/star-skybox/py.png"),
+    render.createMaterial("https://raw.githubusercontent.com/ax255/public-stuff/refs/heads/main/star-skybox/ny.png"),
+}
+
+-- Skybox angles (matching the working code)
+local skyboxAngles = {
+    Angle(0, 0, -90),
+    Angle(0, 90, -90),
+    Angle(0, 180, -90),
+    Angle(0, -90, -90),
+    Angle(0, 0, 0),
+    Angle(0, 0, 180)
+}
+
+-- Skybox matrices
+local skyboxMatrices = {}
+
+-- Update skybox matrices based on viewer position (for proper skybox effect)
+local function updateSkyboxMatrices()
+    local pos = render.getEyePos()
+
+    for i = 1, 6 do
+        skyboxMatrices[i] = Matrix()
+        skyboxMatrices[i]:translate(pos)
+        skyboxMatrices[i]:rotate(skyboxAngles[i])
+        skyboxMatrices[i]:scale(Vector(scale, scale, scale))
+        skyboxMatrices[i]:translate(Vector(-0.5, -0.5, 0.5))
+    end
+end
+
+-- Clear screens
+local function clearScreens()
+    for _, holo in ipairs(screenHolos) do
+        if holo:isValid() then
+            holo:remove()
+        end
+    end
+    screenHolos = {}
+    screensReady = false
+end
+
+-- Create screen box
+local function createScreenBox()
+    if not point1 or not point2 then
+        print("[Screen Box] Error: Set both points first!")
+        return
+    end
+
+    clearScreens()
+
+    -- Calculate bounds
+    local minPos = Vector(
+        math.min(point1.x, point2.x),
+        math.min(point1.y, point2.y),
+        math.min(point1.z, point2.z)
+    )
+
+    local maxPos = Vector(
+        math.max(point1.x, point2.x),
+        math.max(point1.y, point2.y),
+        math.max(point1.z, point2.z)
+    )
+
+    local center = (minPos + maxPos) / 2
+    local size = maxPos - minPos
+    local width = size.x
+    local height = size.y
+    local depth = size.z
+
+    -- Screen configurations (facing inward)
+    -- Each screen maps to a specific skybox face
+    local screens = {
+        {pos = Vector(0, height/2, 0),    ang = Angle(0, 180, 90),  size = Vector(width/48, depth/48, 0.1),   face = 1},  -- Front
+        {pos = Vector(width/2, 0, 0),     ang = Angle(0, -90, 90),  size = Vector(height/48, depth/48, 0.1),  face = 2},  -- Right
+        {pos = Vector(0, -height/2, 0),   ang = Angle(0, 0, 90),    size = Vector(width/48, depth/48, 0.1),   face = 3},  -- Back
+        {pos = Vector(-width/2, 0, 0),    ang = Angle(0, 90, 90),   size = Vector(height/48, depth/48, 0.1),  face = 4},  -- Left
+        {pos = Vector(0, 0, depth/2),     ang = Angle(0, 180, 180), size = Vector(width/48, height/48, 0.1),  face = 5},  -- Top
+        {pos = Vector(0, 0, -depth/2),    ang = Angle(0, 180, 0),   size = Vector(width/48, height/48, 0.1),  face = 6}   -- Bottom
+    }
+
+    -- Create holograms using plate1x1 model
+    for i, screen in ipairs(screens) do
+        local holo = holograms.create(
+            center + screen.pos,
+            screen.ang,
+            "models/hunter/plates/plate1x1.mdl",
+            screen.size
+        )
+
+        holo:suppressEngineLighting(true)
+        -- Each hologram gets its own material with the appropriate render target
+        holo:setMaterial("!" .. materials[screen.face]:getName())
+
+        table.insert(screenHolos, holo)
+    end
+
+    screensReady = true
+    print("[Screen Box] Created " .. #screenHolos .. " screens (" .. math.floor(width) .. "x" .. math.floor(height) .. "x" .. math.floor(depth) .. ")")
+end
+
+-- Set point from trace
+local function setPoint(num)
+    local trace = trace.line(
+        owner():getEyePos(),
+        owner():getEyePos() + owner():getEyeAngles():getForward() * 10000,
+        owner()
+    )
+
+    if trace.Hit then
+        if num == 1 then
+            point1 = trace.HitPos
+            print("[Screen Box] Point 1 set")
+        elseif num == 2 then
+            point2 = trace.HitPos
+            print("[Screen Box] Point 2 set")
+        end
+    end
+end
+
+-- Key input
+hook.add("inputPressed", "screenbox_keys", function(key)
+    if key == KEY.PAD_1 then
+        setPoint(1)
+    elseif key == KEY.PAD_2 then
+        setPoint(2)
+    elseif key == KEY.PAD_3 then
+        createScreenBox()
+    end
+end)
+
+-- Render each skybox face to its corresponding render target
+hook.add("renderoffscreen", "screenbox_render", function()
+    if not screensReady then return end
+
+    -- Update skybox matrices to follow viewer
+    updateSkyboxMatrices()
+
+    -- Calculate bloom value
+    local val = math.abs(math.sin(timer.curtime() * 0.05))
+
+    -- Render each skybox face to its own render target
+    for i = 1, 6 do
+        render.selectRenderTarget(renderTargets[i])
+        render.clear(Color(0, 0, 0, 255))
+
+        render.pushViewMatrix({type = "3D", zfar = 300000})
+        render.pushMatrix(skyboxMatrices[i], true)
+        render.setMaterial(skyboxTextures[i])
+        render.setMaterialEffectBloom(skyboxTextures[i], 0.5 + 0.6 * val, 0.5 + 0.6 * val, 0.5 + 0.6 * val, 0.5 + 0.6 * val)
+        render.drawTexturedRectUV(0, 0, 1, 1, 0.0007, 0.0007, 0.9993, 0.9993)
+        render.popMatrix()
+        render.popViewMatrix()
+    end
+
+    -- Deselect render target
+    render.selectRenderTarget()
+end)
+
+-- HUD
+hook.add("postdrawhud", "screenbox_hud", function()
+    render.setColor(Color(255, 255, 255))
+    render.drawSimpleText(10, 50, "SKYBOX SCREEN BOX", "DermaLarge")
+    render.drawSimpleText(10, 80, "Numpad 1: Point 1", "DermaDefault")
+    render.drawSimpleText(10, 100, "Numpad 2: Point 2", "DermaDefault")
+    render.drawSimpleText(10, 120, "Numpad 3: Create", "DermaDefault")
+
+    render.setColor(point1 and Color(0, 255, 0) or Color(255, 0, 0))
+    render.drawSimpleText(10, 150, "Point 1: " .. (point1 and "SET" or "NOT SET"), "DermaDefault")
+
+    render.setColor(point2 and Color(0, 255, 0) or Color(255, 0, 0))
+    render.drawSimpleText(10, 170, "Point 2: " .. (point2 and "SET" or "NOT SET"), "DermaDefault")
+
+    render.setColor(Color(255, 255, 255))
+    render.drawSimpleText(10, 190, "Active: " .. (screensReady and "YES" or "NO"), "DermaDefault")
+end)
+
+-- 3D markers
+hook.add("postdrawopaquererenderables", "screenbox_markers", function()
+    if point1 then
+        render.draw3DBox(point1, Angle(0, 0, 0), Vector(-5, -5, -5), Vector(5, 5, 5), Color(0, 255, 0, 200))
+    end
+
+    if point2 then
+        render.draw3DBox(point2, Angle(0, 0, 0), Vector(-5, -5, -5), Vector(5, 5, 5), Color(255, 0, 0, 200))
+    end
+
+    if point1 and point2 then
+        render.draw3DLine(point1, point2, Color(255, 255, 0, 200))
+    end
+end)
