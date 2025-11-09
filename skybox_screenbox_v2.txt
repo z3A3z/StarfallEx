@@ -75,7 +75,7 @@ if SERVER then
 
         -- Spawn screen entities
         for i, screen in ipairs(screens) do
-            local ent = prop.createSent(
+            local ent = prop.createComponent(
                 center + screen.pos,
                 screen.ang,
                 "starfall_screen",
@@ -83,8 +83,8 @@ if SERVER then
                 true
             )
 
-            ent:setPos(center + screen.pos)
-            ent:setAngles(screen.ang)
+            -- Scale the screen entity (note: might need adjustment per model)
+            ent:setScale(screen.scale)
 
             -- Link screen to this chip
             timer.simple(0.1 * i, function()
