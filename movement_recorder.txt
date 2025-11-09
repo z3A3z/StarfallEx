@@ -7,7 +7,7 @@
     Press NUM 2: Remove the last spawned clone
 
     The code continuously records your position, angles, model, and animation.
-    Each clone plays the recording from start to end, then stays at the final position.
+    All clones loop the same recording path indefinitely.
 ]]
 
 -- Recording data
@@ -134,19 +134,18 @@ hook.add("think", "update_clones", function()
             local elapsed = timer.curtime() - clone.startTime
             local totalDuration = clone.recording[clone.totalFrames].time
 
-            -- Don't loop - clamp to last frame when finished
+            -- Loop the recording infinitely
+            if totalDuration > 0 then
+                elapsed = elapsed % totalDuration
+            end
+
+            -- Find the appropriate frame based on elapsed time
             local targetFrame = 1
-            if elapsed >= totalDuration then
-                -- Stay at the last frame
-                targetFrame = clone.totalFrames
-            else
-                -- Find the appropriate frame based on elapsed time
-                for j = 1, clone.totalFrames do
-                    if clone.recording[j].time <= elapsed then
-                        targetFrame = j
-                    else
-                        break
-                    end
+            for j = 1, clone.totalFrames do
+                if clone.recording[j].time <= elapsed then
+                    targetFrame = j
+                else
+                    break
                 end
             end
 
