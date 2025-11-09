@@ -1,6 +1,6 @@
 --@name Movement Recorder & Cloner
 --@author
---@client
+--@server
 
 --[[
     Press NUM 1: Spawn a hologram clone that replays your recorded movements
