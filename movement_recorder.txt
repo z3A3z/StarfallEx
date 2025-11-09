@@ -25,12 +25,22 @@ hook.add("think", "record_movement", function()
     local ply = owner()
     if not ply:isValid() then return end
 
+    -- Determine animation based on velocity
+    local vel = ply:getVelocity()
+    local speed = vel:getLength()
+    local animName = "idle_all"
+
+    if speed > 150 then
+        animName = "run_all"
+    elseif speed > 10 then
+        animName = "walk_all"
+    end
+
     local frame = {
         pos = ply:getPos(),
         ang = ply:getAngles(),
-        vel = ply:getVelocity(),
-        sequence = ply:getSequence(),
-        progress = ply:getAnimationProgress(),
+        vel = vel,
+        animName = animName,
         model = ply:getModel(),
         time = timer.curtime() - recordingStartTime
     }
@@ -51,8 +61,7 @@ local function spawnClone()
         recordingCopy[i] = {
             pos = Vector(frame.pos.x, frame.pos.y, frame.pos.z),
             ang = Angle(frame.ang.p, frame.ang.y, frame.ang.r),
-            sequence = frame.sequence,
-            progress = frame.progress,
+            animName = frame.animName,
             model = frame.model,
             time = frame.time
         }
@@ -75,7 +84,7 @@ local function spawnClone()
     end
 
     -- Set initial animation
-    holo:setAnimation(startFrame.sequence, startFrame.progress, 1)
+    holo:setAnimation(startFrame.animName, 0, 1)
 
     -- Store clone data
     local cloneData = {
@@ -83,6 +92,7 @@ local function spawnClone()
         recording = recordingCopy,
         startTime = timer.curtime(),
         currentFrame = 1,
+        currentAnim = startFrame.animName,
         totalFrames = #recordingCopy
     }
 
@@ -137,11 +147,13 @@ hook.add("think", "update_clones", function()
             clone.holo:setPos(frame.pos)
             clone.holo:setAngles(frame.ang)
 
-            -- Update animation
-            if clone.currentFrame ~= targetFrame then
-                clone.holo:setAnimation(frame.sequence, frame.progress, 1)
-                clone.currentFrame = targetFrame
+            -- Update animation only when it changes
+            if clone.currentAnim ~= frame.animName then
+                clone.holo:setAnimation(frame.animName, 0, 1)
+                clone.currentAnim = frame.animName
             end
+
+            clone.currentFrame = targetFrame
         end
     end
 end)
