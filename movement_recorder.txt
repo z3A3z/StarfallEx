@@ -139,10 +139,17 @@ if SERVER then
 end
 
 if CLIENT then
-    -- Client: Record player data and send to server
+    -- Client: Record player data and send to server (throttled)
+    local nextSendTime = 0
+    local sendInterval = 0.05  -- Send 20 times per second
+
     hook.add("think", "record_movement", function()
         local ply = player()
         if not ply:isValid() then return end
+
+        -- Throttle net messages to avoid burst limit
+        if timer.curtime() < nextSendTime then return end
+        nextSendTime = timer.curtime() + sendInterval
 
         -- Get body angles (only yaw)
         local bodyAng = ply:getAngles()
