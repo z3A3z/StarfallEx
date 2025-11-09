@@ -29,16 +29,13 @@ hook.add("think", "record_movement", function()
     local bodyAng = ply:getAngles()
     local bodyYaw = Angle(0, bodyAng.y, 0)
 
-    -- Get the actual animation sequence and progress from the player
+    -- Get the actual animation sequence from the player
     local seqID = ply:getSequence()
-    local seqName = ply:getSequenceName(seqID)
-    local animProgress = ply:getAnimationProgress()
 
     local frame = {
         pos = ply:getPos(),
         ang = bodyYaw,
-        seqName = seqName,
-        animProgress = animProgress,
+        seq = seqID,
         model = ply:getModel(),
         time = timer.curtime() - recordingStartTime
     }
@@ -83,7 +80,7 @@ local function spawnClone()
     end
 
     -- Set initial animation and let it play naturally
-    holo:setAnimation(startFrame.seqName, 0, 1)
+    holo:setAnimation(startFrame.seq, 0, 1)
 
     -- Store clone data
     local cloneData = {
@@ -91,7 +88,7 @@ local function spawnClone()
         recording = recordingCopy,
         startTime = timer.curtime(),
         currentFrame = 1,
-        currentSeq = startFrame.seqName,
+        currentSeq = startFrame.seq,
         totalFrames = #recordingCopy
     }
 
@@ -152,9 +149,9 @@ hook.add("think", "update_clones", function()
             clone.holo:setAngles(frame.ang)
 
             -- Only change animation when sequence changes - let it play naturally
-            if clone.currentSeq ~= frame.seqName then
-                clone.holo:setAnimation(frame.seqName, 0, 1)
-                clone.currentSeq = frame.seqName
+            if clone.currentSeq ~= frame.seq then
+                clone.holo:setAnimation(frame.seq, 0, 1)
+                clone.currentSeq = frame.seq
             end
 
             clone.currentFrame = targetFrame
