@@ -226,6 +226,9 @@ if SERVER then
                     targetFrame = j
                 end
 
+                -- Ensure targetFrame is valid before using it
+                if targetFrame < 1 then targetFrame = 1 end
+
                 -- Handle loop wrap-around (when time resets)
                 if elapsed < recording[targetFrame].time then
                     targetFrame = 1
