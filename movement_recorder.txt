@@ -308,9 +308,12 @@ if CLIENT then
                         if curTime - tracked.lastStepTime >= stepInterval and soundsPlayed < maxSoundsPerFrame then
                             -- Play random footstep sound from the hologram entity
                             local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
-                            ent:emitSound(footstep, 70, 100, 1)
-                            tracked.lastStepTime = curTime
-                            soundsPlayed = soundsPlayed + 1
+                            -- Use pcall to catch permission errors for holograms we don't own
+                            local success = pcall(function() ent:emitSound(footstep, 70, 100, 1) end)
+                            if success then
+                                tracked.lastStepTime = curTime
+                                soundsPlayed = soundsPlayed + 1
+                            end
                         end
                     end
 
