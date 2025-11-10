@@ -17,6 +17,7 @@ if SERVER then
     local clones = {}
     local nextRecordTime = 0
     local recordInterval = 0.05  -- Record at 20 fps to save CPU
+    local maxClones = 20  -- Maximum number of clones to prevent crashes
 
     -- Record owner's movement on server (throttled to save CPU)
     hook.add("think", "record_movement", function()
@@ -54,6 +55,14 @@ if SERVER then
     net.receive("spawnClone", function(len, ply)
         -- Only allow the chip owner to spawn clones
         if ply ~= owner() then return end
+
+        -- Check max clone limit
+        if #clones >= maxClones then
+            net.start("cloneMessage")
+            net.writeString("[Clone] Maximum clone limit reached (" .. maxClones .. ")! Remove some clones first.")
+            net.send(ply)
+            return
+        end
 
         if #recording == 0 then
             net.start("cloneMessage")
