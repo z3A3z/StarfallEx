@@ -21,7 +21,7 @@ if SERVER then
     local clones = {}
     local nextRecordTime = 0
     local recordInterval = 0.05  -- Record at 20 fps to save CPU
-    local isRecording = true  -- Start recording by default
+    local isRecording = false  -- Recording paused by default - press NUM 7 to start
     local playerColor = nil  -- Store player color once
     local recordTarget = owner()  -- Target to record (default: owner)
 
@@ -145,8 +145,12 @@ if SERVER then
         if ply ~= owner() then return end
 
         isRecording = true
+        -- Reset start time if this is the first time starting
+        if #recording == 0 then
+            recordingStartTime = timer.curtime()
+        end
         net.start("cloneMessage")
-        net.writeString("[Recording] Recording resumed")
+        net.writeString("[Recording] Recording started")
         net.send(ply)
     end)
 
@@ -287,6 +291,11 @@ if CLIENT then
                     end
 
                     local tracked = trackedHolos[ent]
+                    if not tracked or not tracked.lastPos then
+                        tracked = {lastPos = pos, lastStepTime = 0}
+                        trackedHolos[ent] = tracked
+                    end
+
                     local movement = pos - tracked.lastPos
 
                     -- Check if hologram moved (horizontal movement)
@@ -350,8 +359,8 @@ if CLIENT then
         print(msg)
     end)
 
-    print("[Movement Recorder] Loaded! Recording started.")
+    print("[Movement Recorder] Loaded! Recording paused.")
     print("[Controls] 1: Spawn clone | 2: Remove clone")
     print("[Controls] 6: Record owner | 9: Record target")
-    print("[Controls] 7: Resume recording | 8: Pause recording")
+    print("[Controls] 7: Start/Resume recording | 8: Pause recording")
 end
