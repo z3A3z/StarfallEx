@@ -89,8 +89,7 @@ if SERVER then
             holo = holo,
             startTime = timer.curtime(),
             currentFrame = 1,
-            currentSeq = startFrame.seq,
-            lastStepTime = 0  -- Track when last footstep sound was played
+            currentSeq = startFrame.seq
         }
 
         table.insert(clones, cloneData)
@@ -182,20 +181,6 @@ if SERVER then
                     clone.currentSeq = frame.seq
                 end
 
-                -- Play footstep sounds when moving
-                local isMoving = math.abs(frame.moveX) > 0.1 or math.abs(frame.moveY) > 0.1
-                if isMoving then
-                    local curTime = timer.curtime()
-                    local stepInterval = 0.3  -- Time between footsteps
-
-                    if curTime - clone.lastStepTime >= stepInterval then
-                        -- Randomly choose between concrete1 and concrete2
-                        local footstepSound = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
-                        clone.holo:emitSound(footstepSound, 70, 100, 0.5)
-                        clone.lastStepTime = curTime
-                    end
-                end
-
                 clone.currentFrame = targetFrame
             end
         end
@@ -203,7 +188,64 @@ if SERVER then
 end
 
 if CLIENT then
-    -- Client: Input detection only
+    -- Client: Track holograms for footstep sounds
+    local trackedHolos = {}  -- [hologram] = {lastPos, lastStepTime}
+
+    -- Monitor holograms and play footstep sounds client-side
+    hook.add("think", "clone_footsteps", function()
+        local myPos = player():getPos()
+
+        -- Find all nearby holograms
+        for _, ent in ipairs(find.all()) do
+            if ent:getClass() == "starfall_hologram" then
+                local dist = ent:getPos():getDistance(myPos)
+
+                -- Only process holograms within hearing range
+                if dist < 1000 then
+                    local pos = ent:getPos()
+
+                    if not trackedHolos[ent] then
+                        trackedHolos[ent] = {
+                            lastPos = pos,
+                            lastStepTime = 0
+                        }
+                    end
+
+                    local tracked = trackedHolos[ent]
+                    local movement = pos - tracked.lastPos
+
+                    -- Check if hologram moved (horizontal movement)
+                    local speed = Vector(movement.x, movement.y, 0):getLength()
+
+                    if speed > 2 then  -- Moving threshold
+                        local curTime = timer.curtime()
+                        local stepInterval = 0.3
+
+                        if curTime - tracked.lastStepTime >= stepInterval then
+                            -- Play random footstep sound at hologram position
+                            local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
+                            sound.play(footstep, pos, 70, 100, 0.5)
+                            tracked.lastStepTime = curTime
+                        end
+                    end
+
+                    tracked.lastPos = pos
+                else
+                    -- Remove from tracking if too far
+                    trackedHolos[ent] = nil
+                end
+            end
+        end
+
+        -- Clean up invalid holograms
+        for ent, _ in pairs(trackedHolos) do
+            if not ent:isValid() then
+                trackedHolos[ent] = nil
+            end
+        end
+    end)
+
+    -- Client: Input detection
     hook.add("inputPressed", "clone_controls", function(key)
         if key == KEY.PAD_1 then
             net.start("spawnClone")
