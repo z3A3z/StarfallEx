@@ -188,6 +188,63 @@ if SERVER then
 end
 
 if CLIENT then
+    -- Client: Track holograms for footstep sounds
+    local trackedHolos = {}  -- [hologram] = {lastPos, lastStepTime}
+
+    -- Monitor holograms and play footstep sounds client-side
+    hook.add("think", "clone_footsteps", function()
+        local myPos = player():getPos()
+
+        -- Find all nearby holograms
+        for _, ent in ipairs(find.all()) do
+            if ent:getClass() == "starfall_hologram" then
+                local dist = ent:getPos():getDistance(myPos)
+
+                -- Only process holograms within hearing range
+                if dist < 1000 then
+                    local pos = ent:getPos()
+
+                    if not trackedHolos[ent] then
+                        trackedHolos[ent] = {
+                            lastPos = pos,
+                            lastStepTime = 0
+                        }
+                    end
+
+                    local tracked = trackedHolos[ent]
+                    local movement = pos - tracked.lastPos
+
+                    -- Check if hologram moved (horizontal movement)
+                    local speed = Vector(movement.x, movement.y, 0):getLength()
+
+                    if speed > 2 then  -- Moving threshold
+                        local curTime = timer.curtime()
+                        local stepInterval = 0.3
+
+                        if curTime - tracked.lastStepTime >= stepInterval then
+                            -- Play random footstep sound from the hologram entity
+                            local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
+                            ent:emitSound(footstep, 70, 100, 0.5)
+                            tracked.lastStepTime = curTime
+                        end
+                    end
+
+                    tracked.lastPos = pos
+                else
+                    -- Remove from tracking if too far
+                    trackedHolos[ent] = nil
+                end
+            end
+        end
+
+        -- Clean up invalid holograms
+        for ent, _ in pairs(trackedHolos) do
+            if not ent:isValid() then
+                trackedHolos[ent] = nil
+            end
+        end
+    end)
+
     -- Client: Input detection
     hook.add("inputPressed", "clone_controls", function(key)
         if key == KEY.PAD_1 then
