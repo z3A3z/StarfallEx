@@ -89,7 +89,8 @@ if SERVER then
             holo = holo,
             startTime = timer.curtime(),
             currentFrame = 1,
-            currentSeq = startFrame.seq
+            currentSeq = startFrame.seq,
+            lastStepTime = 0  -- Track when last footstep sound was played
         }
 
         table.insert(clones, cloneData)
@@ -179,6 +180,20 @@ if SERVER then
                 if clone.currentSeq ~= frame.seq then
                     clone.holo:setAnimation(frame.seq, 0, 1)
                     clone.currentSeq = frame.seq
+                end
+
+                -- Play footstep sounds when moving
+                local isMoving = math.abs(frame.moveX) > 0.1 or math.abs(frame.moveY) > 0.1
+                if isMoving then
+                    local curTime = timer.curtime()
+                    local stepInterval = 0.3  -- Time between footsteps
+
+                    if curTime - clone.lastStepTime >= stepInterval then
+                        -- Randomly choose between concrete1 and concrete2
+                        local footstepSound = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
+                        clone.holo:emitSound(footstepSound, 70, 100, 0.5)
+                        clone.lastStepTime = curTime
+                    end
                 end
 
                 clone.currentFrame = targetFrame
