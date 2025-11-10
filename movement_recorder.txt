@@ -17,7 +17,6 @@ if SERVER then
     local clones = {}
     local nextRecordTime = 0
     local recordInterval = 0.05  -- Record at 20 fps to save CPU
-    local maxClones = 20  -- Maximum number of clones to prevent crashes
 
     -- Record owner's movement on server (throttled to save CPU)
     hook.add("think", "record_movement", function()
@@ -55,14 +54,6 @@ if SERVER then
     net.receive("spawnClone", function(len, ply)
         -- Only allow the chip owner to spawn clones
         if ply ~= owner() then return end
-
-        -- Check max clone limit
-        if #clones >= maxClones then
-            net.start("cloneMessage")
-            net.writeString("[Clone] Maximum clone limit reached (" .. maxClones .. ")! Remove some clones first.")
-            net.send(ply)
-            return
-        end
 
         if #recording == 0 then
             net.start("cloneMessage")
@@ -199,10 +190,12 @@ end
 if CLIENT then
     -- Client: Track holograms for footstep sounds
     local trackedHolos = {}  -- [hologram] = {lastPos, lastStepTime}
+    local maxSoundsPerFrame = 3  -- Limit sounds per frame to prevent burst limit
 
     -- Monitor holograms and play footstep sounds client-side
     hook.add("think", "clone_footsteps", function()
         local myPos = player():getPos()
+        local soundsThisFrame = 0
 
         -- Find all nearby holograms
         for _, ent in ipairs(find.all()) do
@@ -231,9 +224,13 @@ if CLIENT then
                         local stepInterval = 0.3
 
                         if curTime - tracked.lastStepTime >= stepInterval then
-                            -- Play random footstep sound from the hologram entity
-                            local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
-                            ent:emitSound(footstep, 70, 100, 0.5)
+                            -- Only play sound if we haven't exceeded the per-frame limit
+                            if soundsThisFrame < maxSoundsPerFrame then
+                                -- Play random footstep sound from the hologram entity
+                                local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
+                                ent:emitSound(footstep, 70, 100, 0.5)
+                                soundsThisFrame = soundsThisFrame + 1
+                            end
                             tracked.lastStepTime = curTime
                         end
                     end
