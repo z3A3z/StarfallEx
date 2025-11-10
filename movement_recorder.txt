@@ -5,6 +5,10 @@
 --[[
     Press NUM 1: Spawn a hologram clone that replays your recorded movements
     Press NUM 2: Remove the last spawned clone
+    Press NUM 6: Set recording target to owner (yourself)
+    Press NUM 7: Start/Resume recording
+    Press NUM 8: Pause recording
+    Press NUM 9: Set recording target to player you're looking at
 
     The code continuously records your position, angles, model, and animation.
     All clones loop the same recording path indefinitely.
@@ -17,11 +21,21 @@ if SERVER then
     local clones = {}
     local nextRecordTime = 0
     local recordInterval = 0.05  -- Record at 20 fps to save CPU
+    local isRecording = true  -- Start recording by default
+    local playerColor = nil  -- Store player color once
+    local recordTarget = owner()  -- Target to record (default: owner)
 
-    -- Record owner's movement on server (throttled to save CPU)
+    -- Record target's movement on server (throttled to save CPU)
     hook.add("think", "record_movement", function()
-        local ply = owner()
-        if not ply:isValid() then return end
+        if not isRecording then return end  -- Skip if paused
+
+        local ply = recordTarget
+        if not ply or not ply:isValid() then return end
+
+        -- Get player color once on first frame
+        if playerColor == nil then
+            playerColor = ply:getPlayerColor()
+        end
 
         -- Throttle recording to reduce CPU usage
         local curTime = timer.curtime()
@@ -36,7 +50,6 @@ if SERVER then
         local seqID = ply:getSequence()
         local moveX = ply:getPose("move_x")
         local moveY = ply:getPose("move_y")
-        local playerColor = ply:getPlayerColor()
 
         local frame = {
             pos = ply:getPos(),
@@ -45,7 +58,6 @@ if SERVER then
             moveX = moveX,
             moveY = moveY,
             model = ply:getModel(),
-            playerColor = playerColor,
             time = curTime - recordingStartTime
         }
 
@@ -86,8 +98,10 @@ if SERVER then
         holo:setPose("move_x", startFrame.moveX)
         holo:setPose("move_y", startFrame.moveY)
 
-        -- Set player color
-        holo:setPlayerColor(startFrame.playerColor)
+        -- Set player color (stored once at initialization)
+        if playerColor then
+            holo:setPlayerColor(playerColor)
+        end
 
         -- Store clone data
         local cloneData = {
@@ -124,6 +138,57 @@ if SERVER then
         net.start("cloneMessage")
         net.writeString("[Clone] Removed clone. " .. #clones .. " clones remaining.")
         net.send(ply)
+    end)
+
+    -- Resume recording
+    net.receive("resumeRecording", function(len, ply)
+        if ply ~= owner() then return end
+
+        isRecording = true
+        net.start("cloneMessage")
+        net.writeString("[Recording] Recording resumed")
+        net.send(ply)
+    end)
+
+    -- Pause recording
+    net.receive("pauseRecording", function(len, ply)
+        if ply ~= owner() then return end
+
+        isRecording = false
+        net.start("cloneMessage")
+        net.writeString("[Recording] Recording paused")
+        net.send(ply)
+    end)
+
+    -- Set target to owner
+    net.receive("setTargetToOwner", function(len, ply)
+        if ply ~= owner() then return end
+
+        recordTarget = owner()
+        playerColor = nil  -- Reset player color to capture new target's color
+        net.start("cloneMessage")
+        net.writeString("[Target] Recording owner")
+        net.send(ply)
+    end)
+
+    -- Set target to player looking at
+    net.receive("setTargetToLookAt", function(len, ply)
+        if ply ~= owner() then return end
+
+        local trace = ply:getEyeTrace()
+        local target = trace.Entity
+
+        if target and target:isValid() and target:isPlayer() then
+            recordTarget = target
+            playerColor = nil  -- Reset player color to capture new target's color
+            net.start("cloneMessage")
+            net.writeString("[Target] Recording " .. target:getName())
+            net.send(ply)
+        else
+            net.start("cloneMessage")
+            net.writeString("[Target] No player found! Look at a player and press NUM 9")
+            net.send(ply)
+        end
     end)
 
     -- Update all clones
@@ -195,7 +260,7 @@ end
 if CLIENT then
     -- Client: Track holograms for footstep sounds
     local trackedHolos = {}  -- [hologram] = {lastPos, lastStepTime}
-    local maxSoundsPerFrame = 2  -- Strict limit to prevent burst
+    local maxSoundsPerFrame = 1  -- Strict limit to prevent burst
 
     -- Monitor holograms and play footstep sounds client-side
     hook.add("think", "clone_footsteps", function()
@@ -234,7 +299,7 @@ if CLIENT then
                         if curTime - tracked.lastStepTime >= stepInterval and soundsPlayed < maxSoundsPerFrame then
                             -- Play random footstep sound from the hologram entity
                             local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
-                            ent:emitSound(footstep, 70, 100, 0.5)
+                            ent:emitSound(footstep, 70, 100, 1)
                             tracked.lastStepTime = curTime
                             soundsPlayed = soundsPlayed + 1
                         end
@@ -264,6 +329,18 @@ if CLIENT then
         elseif key == KEY.PAD_2 then
             net.start("removeClone")
             net.send()
+        elseif key == KEY.PAD_6 then
+            net.start("setTargetToOwner")
+            net.send()
+        elseif key == KEY.PAD_7 then
+            net.start("resumeRecording")
+            net.send()
+        elseif key == KEY.PAD_8 then
+            net.start("pauseRecording")
+            net.send()
+        elseif key == KEY.PAD_9 then
+            net.start("setTargetToLookAt")
+            net.send()
         end
     end)
 
@@ -274,5 +351,7 @@ if CLIENT then
     end)
 
     print("[Movement Recorder] Loaded! Recording started.")
-    print("[Movement Recorder] Numpad 1: Spawn clone | Numpad 2: Remove last clone")
+    print("[Controls] 1: Spawn clone | 2: Remove clone")
+    print("[Controls] 6: Record owner | 9: Record target")
+    print("[Controls] 7: Resume recording | 8: Pause recording")
 end
