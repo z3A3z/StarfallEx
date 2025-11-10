@@ -190,12 +190,13 @@ end
 if CLIENT then
     -- Client: Track holograms for footstep sounds
     local trackedHolos = {}  -- [hologram] = {lastPos, lastStepTime}
-    local maxSoundsPerFrame = 3  -- Limit sounds per frame to prevent burst limit
 
     -- Monitor holograms and play footstep sounds client-side
     hook.add("think", "clone_footsteps", function()
+        -- Check if we have sounds available before processing
+        if bass.soundsLeft() < 5 then return end
+
         local myPos = player():getPos()
-        local soundsThisFrame = 0
 
         -- Find all nearby holograms
         for _, ent in ipairs(find.all()) do
@@ -224,13 +225,9 @@ if CLIENT then
                         local stepInterval = 0.3
 
                         if curTime - tracked.lastStepTime >= stepInterval then
-                            -- Only play sound if we haven't exceeded the per-frame limit
-                            if soundsThisFrame < maxSoundsPerFrame then
-                                -- Play random footstep sound from the hologram entity
-                                local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
-                                ent:emitSound(footstep, 70, 100, 0.5)
-                                soundsThisFrame = soundsThisFrame + 1
-                            end
+                            -- Play random footstep sound from the hologram entity
+                            local footstep = math.random() > 0.5 and "player/footsteps/concrete1.wav" or "player/footsteps/concrete2.wav"
+                            ent:emitSound(footstep, 70, 100, 0.5)
                             tracked.lastStepTime = curTime
                         end
                     end
