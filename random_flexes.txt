@@ -1,0 +1,36 @@
+--@name Random Flexes
+--@author
+--@client
+
+--[[
+    Constantly randomizes facial flexes on the local player
+    Creates random facial expressions
+]]
+
+local ply = player()
+local flexes = {}
+local flexCount = 0
+
+-- Get all available flexes
+local flexTable = ply:getFlexes()
+for name, id in pairs(flexTable) do
+    table.insert(flexes, id)
+    flexCount = flexCount + 1
+end
+
+print("[Random Flexes] Found " .. flexCount .. " flexes")
+
+-- Randomize flexes constantly
+hook.add("think", "randomize_flexes", function()
+    if not ply:isValid() then return end
+
+    -- Randomize a few flexes each frame for varied expressions
+    for i = 1, math.min(5, flexCount) do
+        local randomFlex = flexes[math.random(1, flexCount)]
+        local randomWeight = math.random() * 2 - 0.5  -- Random between -0.5 and 1.5
+
+        ply:setFlexWeight(randomFlex, randomWeight)
+    end
+end)
+
+print("[Random Flexes] Loaded! Your face will go crazy now.")
