@@ -195,7 +195,7 @@ if CLIENT then
     -- Monitor holograms and play footstep sounds client-side
     hook.add("think", "clone_footsteps", function()
         -- Check if we have sounds available before processing
-        if bass.soundsLeft() < 5 then return end
+        if sound.emitSoundsLeft() < 5 then return end
 
         local myPos = player():getPos()
         local soundsPlayed = 0
