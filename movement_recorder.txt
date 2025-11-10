@@ -48,6 +48,7 @@ if SERVER then
 
         -- Get animation and pose data
         local seqID = ply:getSequence()
+        local cycle = ply:getCycle()  -- Animation progress (0-1)
         local moveX = ply:getPose("move_x")
         local moveY = ply:getPose("move_y")
 
@@ -55,6 +56,7 @@ if SERVER then
             pos = ply:getPos(),
             ang = bodyYaw,
             seq = seqID,
+            cycle = cycle,
             moveX = moveX,
             moveY = moveY,
             model = ply:getModel(),
@@ -95,6 +97,7 @@ if SERVER then
 
         -- Set initial animation and pose
         holo:setAnimation(startFrame.seq, 0, 1)
+        holo:setCycle(startFrame.cycle or 0)
         holo:setPose("move_x", startFrame.moveX)
         holo:setPose("move_y", startFrame.moveY)
 
@@ -256,6 +259,11 @@ if SERVER then
                 if clone.currentSeq ~= frame.seq then
                     clone.holo:setAnimation(frame.seq, 0, 1)
                     clone.currentSeq = frame.seq
+                end
+
+                -- Apply animation cycle (this makes animations like dance progress)
+                if frame.cycle then
+                    clone.holo:setCycle(frame.cycle)
                 end
 
                 clone.currentFrame = targetFrame
