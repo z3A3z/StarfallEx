@@ -51,12 +51,16 @@ if SERVER then
         local moveX = ply:getPose("move_x")
         local moveY = ply:getPose("move_y")
 
+        -- Get current activity/gesture (for dance, taunt, etc.)
+        local activity = ply:getActivity()
+
         local frame = {
             pos = ply:getPos(),
             ang = bodyYaw,
             seq = seqID,
             moveX = moveX,
             moveY = moveY,
+            activity = activity,
             model = ply:getModel(),
             time = curTime - recordingStartTime
         }
@@ -98,6 +102,11 @@ if SERVER then
         holo:setPose("move_x", startFrame.moveX)
         holo:setPose("move_y", startFrame.moveY)
 
+        -- Set initial activity (for gestures/dances)
+        if startFrame.activity then
+            holo:setActivity(startFrame.activity)
+        end
+
         -- Set player color (stored once at initialization)
         if playerColor then
             holo:setPlayerColor(playerColor)
@@ -108,7 +117,8 @@ if SERVER then
             holo = holo,
             startTime = timer.curtime(),
             currentFrame = 1,
-            currentSeq = startFrame.seq
+            currentSeq = startFrame.seq,
+            currentActivity = startFrame.activity
         }
 
         table.insert(clones, cloneData)
@@ -256,6 +266,12 @@ if SERVER then
                 if clone.currentSeq ~= frame.seq then
                     clone.holo:setAnimation(frame.seq, 0, 1)
                     clone.currentSeq = frame.seq
+                end
+
+                -- Apply activity changes (for gestures like dance)
+                if frame.activity and clone.currentActivity ~= frame.activity then
+                    clone.holo:setActivity(frame.activity)
+                    clone.currentActivity = frame.activity
                 end
 
                 clone.currentFrame = targetFrame
