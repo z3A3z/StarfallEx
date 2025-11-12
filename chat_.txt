@@ -211,39 +211,29 @@ if SERVER then
             local posChanged = cache.pos ~= playerPos
             local yawChanged = math.abs(cache.yaw - yaw) > 0.1
 
-            -- Always update for wave motion and fade-in
+            -- Update base position and angle using HoloText methods
             local ang = Angle(0, yaw + 90, 0)
             local centerOffset = Vector(-currentText.textWidth / 2, 0, 0):getRotated(ang)
             local basePos = playerPos + typingOffset + centerOffset
 
-            -- Update each character with wave motion and fade-in
-            local offset = 0
-            local kerning = currentText.textObj.kerning or 1.1
-            local spaceWidth = currentText.textObj.spaceWidth or 7
+            currentText.textObj:setPos(basePos)
+            currentText.textObj:setAngles(ang)
 
+            -- Now apply wave motion and fade-in to each character
             for i = 1, #currentText.textObj.chars do
                 local charData = currentText.textObj.chars[i]
-                if charData[1] == " " then
-                    offset = offset + spaceWidth
-                elseif charData[1] == "\n" then
-                    -- Skip newlines
-                elseif charData[2] and charData[2]:isValid() then
-                    -- Wave motion: each letter has a phase offset
-                    local waveOffset = math.sin(curTime * waveSpeed + i * 0.3) * waveAmplitude
-                    local charPos = basePos + Vector(0, 0, waveOffset)
+                if charData[2] and charData[2]:isValid() and charData[1] ~= " " and charData[1] ~= "\n" then
+                    -- Get the position that HoloText set
+                    local charPos = charData[2]:getPos()
 
-                    charData[2]:setPos(charPos + Vector(offset, 0, 0):getRotated(ang))
-                    charData[2]:setAngles(ang:rotateAroundAxis(ang:getUp(), 180))
+                    -- Add wave motion offset
+                    local waveOffset = math.sin(curTime * waveSpeed + i * 0.3) * waveAmplitude
+                    charData[2]:setPos(charPos + Vector(0, 0, waveOffset))
 
                     -- Fade-in effect
-                    local targetAlpha = 255
-                    local currentAlpha = math.floor(targetAlpha * fadeProgress)
+                    local currentAlpha = math.floor(255 * fadeProgress)
                     local col = Color(0, 255, 0)
                     charData[2]:setColor(Color(col.r, col.g, col.b, currentAlpha))
-
-                    if charData[1] ~= " " and charData[1] ~= "\n" then
-                        offset = offset + 8 + kerning
-                    end
                 end
             end
 
