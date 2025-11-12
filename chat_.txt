@@ -14,6 +14,13 @@ local scatterDuration = 2
 local scatterSpeed = 100
 local scatterGravity = -200
 
+-- Visual effect settings
+local fadeInDuration = 0.3 -- Time for letters to fade in
+local waveAmplitude = 2 -- How high the wave goes
+local waveSpeed = 3 -- Speed of wave motion
+local bounceRestitution = 0.6 -- Bounce dampening (0.6 = 60% energy retained)
+local groundLevel = 0 -- Ground Z level for bouncing
+
 local function getTextWidth(text)
     if not text or text == "" then return 0 end
     
@@ -58,11 +65,20 @@ if SERVER then
             local textObj = HoloText:new(text, pos, ang, Vector(0.5), Color(0, 255, 0))
             textObj:setMaterial("models/debug/debugwhite")
 
+            -- Set initial alpha to 0 for fade-in effect
+            for i = 1, #textObj.chars do
+                if textObj.chars[i][2] and textObj.chars[i][2]:isValid() then
+                    local col = textObj.chars[i][2]:getColor()
+                    textObj.chars[i][2]:setColor(Color(col.r, col.g, col.b, 0))
+                end
+            end
+
             -- Cache text width and store in playerTexts
             playerTexts[ply] = {
                 textObj = textObj,
                 textWidth = textWidth,
-                text = text
+                text = text,
+                createTime = timer.curtime() -- For fade-in animation
             }
 
             -- Initialize cache with current position/angle
@@ -77,6 +93,9 @@ if SERVER then
     local function startScatter(ply)
         local currentText = playerTexts[ply]
         if not currentText or not currentText.textObj or not currentText.textObj.chars then return end
+
+        -- Get ground level from player position
+        local playerGroundZ = ply:getPos().z
 
         for i = 1, #currentText.textObj.chars do
             if currentText.textObj.chars[i][2] then
@@ -94,7 +113,9 @@ if SERVER then
                     char = char,
                     velocity = velocity,
                     startTime = timer.curtime(),
-                    player = ply
+                    player = ply,
+                    groundZ = playerGroundZ, -- Store ground level for bouncing
+                    bounced = false
                 })
             end
         end
@@ -125,16 +146,30 @@ if SERVER then
             else
                 local progress = elapsed / scatterDuration
 
+                -- Apply gravity
                 scatter.velocity.z = scatter.velocity.z + scatterGravity * frametime
                 local newPos = scatter.holo:getPos() + scatter.velocity * frametime
+
+                -- Bounce on ground detection
+                if newPos.z < scatter.groundZ and scatter.velocity.z < 0 then
+                    newPos.z = scatter.groundZ -- Snap to ground
+                    scatter.velocity.z = -scatter.velocity.z * bounceRestitution -- Reverse and dampen
+
+                    -- Add some randomness to bounce
+                    scatter.velocity.x = scatter.velocity.x * 0.8
+                    scatter.velocity.y = scatter.velocity.y * 0.8
+                end
+
                 scatter.holo:setPos(newPos)
 
+                -- Rotate letters as they scatter
                 local newAng = scatter.holo:getAngles()
                 newAng:rotateAroundAxis(Vector(1, 0, 0), math.random(-5, 5))
                 newAng:rotateAroundAxis(Vector(0, 1, 0), math.random(-5, 5))
                 newAng:rotateAroundAxis(Vector(0, 0, 1), math.random(-5, 5))
                 scatter.holo:setAngles(newAng)
 
+                -- Fade out over time
                 local alpha = math.floor(255 * (1 - progress))
                 local col = scatter.holo:getColor()
                 scatter.holo:setColor(Color(col.r, col.g, col.b, alpha))
@@ -154,6 +189,8 @@ if SERVER then
             updateScatter()
         end
 
+        local curTime = timer.curtime()
+
         for ply, currentText in pairs(playerTexts) do
             if not ply:isValid() then
                 playerTexts[ply] = nil
@@ -167,22 +204,52 @@ if SERVER then
             local playerPos = ply:getPos()
             local yaw = ply:getAngles().yaw
 
-            -- Only update if position or angle changed
+            -- Calculate fade-in progress
+            local fadeProgress = math.min((curTime - currentText.createTime) / fadeInDuration, 1)
+
+            -- Check if position or angle changed
             local posChanged = cache.pos ~= playerPos
             local yawChanged = math.abs(cache.yaw - yaw) > 0.1
 
-            if posChanged or yawChanged then
-                local ang = Angle(0, yaw + 90, 0)
-                local centerOffset = Vector(-currentText.textWidth / 2, 0, 0):getRotated(ang)
-                local pos = playerPos + typingOffset + centerOffset
+            -- Always update for wave motion and fade-in
+            local ang = Angle(0, yaw + 90, 0)
+            local centerOffset = Vector(-currentText.textWidth / 2, 0, 0):getRotated(ang)
+            local basePos = playerPos + typingOffset + centerOffset
 
-                currentText.textObj:setPos(pos)
-                currentText.textObj:setAngles(ang)
+            -- Update each character with wave motion and fade-in
+            local offset = 0
+            local kerning = currentText.textObj.kerning or 1.1
+            local spaceWidth = currentText.textObj.spaceWidth or 7
 
-                -- Update cache
-                cache.pos = playerPos
-                cache.yaw = yaw
+            for i = 1, #currentText.textObj.chars do
+                local charData = currentText.textObj.chars[i]
+                if charData[1] == " " then
+                    offset = offset + spaceWidth * 0.5
+                elseif charData[1] == "\n" then
+                    -- Skip newlines
+                elseif charData[2] and charData[2]:isValid() then
+                    -- Wave motion: each letter has a phase offset
+                    local waveOffset = math.sin(curTime * waveSpeed + i * 0.3) * waveAmplitude
+                    local charPos = basePos + Vector(0, 0, waveOffset)
+
+                    charData[2]:setPos(charPos + Vector(offset, 0, 0):getRotated(ang))
+                    charData[2]:setAngles(ang:rotateAroundAxis(ang:getUp(), 180))
+
+                    -- Fade-in effect
+                    local targetAlpha = 255
+                    local currentAlpha = math.floor(targetAlpha * fadeProgress)
+                    local col = Color(0, 255, 0)
+                    charData[2]:setColor(Color(col.r, col.g, col.b, currentAlpha))
+
+                    if charData[1] ~= " " and charData[1] ~= "\n" then
+                        offset = offset + 8 + kerning
+                    end
+                end
             end
+
+            -- Update cache
+            if posChanged then cache.pos = playerPos end
+            if yawChanged then cache.yaw = yaw end
         end
     end)
     
