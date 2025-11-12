@@ -1,0 +1,202 @@
+--@name Chat
+--@author z3A3z
+--@shared
+--@include holotext.txt
+
+local HoloText = require("holotext.txt")
+
+local playerTexts = {}
+local scatteringChars = {}
+local typingOffset = Vector(0, 0, 80)
+
+local scatterDuration = 2
+local scatterSpeed = 100
+local scatterGravity = -200
+
+local function getTextWidth(text)
+    if not text or text == "" then return 0 end
+    
+    local width = 0
+    local kerning = 1.1
+    local spaceWidth = 7
+    
+    for i = 1, #text do
+        if text[i] == " " then
+            width = width + spaceWidth
+        else
+            width = width + 8 + kerning
+        end
+    end
+    
+    return width
+end
+
+if SERVER then
+    
+    local function createTextDisplay(ply, text)
+        if playerTexts[ply] then
+            if playerTexts[ply].chars then
+                for k, v in pairs(playerTexts[ply].chars) do
+                    if v[2] and v[2]:isValid() then
+                        v[2]:remove()
+                    end
+                end
+            end
+            playerTexts[ply] = nil
+        end
+        
+        if text and text ~= "" then
+            local playerPos = ply:getPos()
+            local ang = Angle(0, ply:getAngles().yaw + 90, 0)
+            
+            local textWidth = getTextWidth(text) * 0.5
+            local centerOffset = Vector(-textWidth / 2, 0, 0):getRotated(ang)
+            
+            local pos = playerPos + typingOffset + centerOffset
+            
+            playerTexts[ply] = HoloText:new(text, pos, ang, Vector(0.5), Color(0, 255, 0))
+            playerTexts[ply]:setMaterial("models/debug/debugwhite")
+        end
+    end
+    
+    -- Start scattering animation
+    local function startScatter(ply)
+        local currentText = playerTexts[ply]
+        if not currentText or not currentText.chars then return end
+        
+        for i = 1, #currentText.chars do
+            if currentText.chars[i][2] then
+                local holo = currentText.chars[i][2]
+                local char = currentText.chars[i][1]
+                
+                local velocity = Vector(
+                    math.random(-scatterSpeed, scatterSpeed),
+                    math.random(-scatterSpeed, scatterSpeed),
+                    math.random(50, 150)
+                )
+                
+                table.insert(scatteringChars, {
+                    holo = holo,
+                    char = char,
+                    velocity = velocity,
+                    startTime = timer.curtime(),
+                    player = ply
+                })
+            end
+        end
+        
+        currentText.chars = {}
+        playerTexts[ply] = nil
+    end
+    
+    local function updateScatter()
+        local curTime = timer.curtime()
+        
+        for i = #scatteringChars, 1, -1 do
+            local scatter = scatteringChars[i]
+            local elapsed = curTime - scatter.startTime
+            
+            if elapsed >= scatterDuration then
+                if scatter.holo and scatter.holo:isValid() then
+                    scatter.holo:remove()
+                end
+                table.remove(scatteringChars, i)
+            else
+                if scatter.holo and scatter.holo:isValid() then
+                    local progress = elapsed / scatterDuration
+                    
+                    scatter.velocity.z = scatter.velocity.z + scatterGravity * timer.frametime()
+                    local newPos = scatter.holo:getPos() + scatter.velocity * timer.frametime()
+                    scatter.holo:setPos(newPos)
+                    
+                    local newAng = scatter.holo:getAngles()
+                    newAng:rotateAroundAxis(Vector(1, 0, 0), math.random(-5, 5))
+                    newAng:rotateAroundAxis(Vector(0, 1, 0), math.random(-5, 5))
+                    newAng:rotateAroundAxis(Vector(0, 0, 1), math.random(-5, 5))
+                    scatter.holo:setAngles(newAng)
+                    
+                    local alpha = math.floor(255 * (1 - progress))
+                    local col = scatter.holo:getColor()
+                    scatter.holo:setColor(Color(col.r, col.g, col.b, alpha))
+                end
+            end
+        end
+    end
+    
+    net.receive("chatTextUpdate", function(len, ply)
+        local text = net.readString()
+        createTextDisplay(ply, text)
+    end)
+    net.receive("chatFinish", function(len, ply)
+        startScatter(ply)
+    end)
+    hook.add("think", "UpdateText", function()
+        if #scatteringChars > 0 then
+            updateScatter()
+        end
+        
+        for ply, currentText in pairs(playerTexts) do
+            if ply:isValid() and currentText then
+                local playerPos = ply:getPos()
+                local ang = Angle(0, ply:getAngles().yaw + 90, 0)
+                
+                local textWidth = getTextWidth(currentText.text) * 0.5
+                local centerOffset = Vector(-textWidth / 2, 0, 0):getRotated(ang)
+                
+                local pos = playerPos + typingOffset + centerOffset
+                
+                currentText:setPos(pos)
+                currentText:setAngles(ang)
+            end
+        end
+    end)
+    
+    hook.add("PlayerDisconnected", "CleanupText", function(ply)
+        if playerTexts[ply] then
+            if playerTexts[ply].chars then
+                for k, v in pairs(playerTexts[ply].chars) do
+                    if v[2] and v[2]:isValid() then
+                        v[2]:remove()
+                    end
+                end
+            end
+            playerTexts[ply] = nil
+        end
+    end)
+    
+    
+else
+    
+    if not hasPermission("input", "Need input permission to detect chat") then 
+        print("Need input permission!")
+        return 
+    end
+    
+    local isTyping = false
+    local lastText = ""
+    
+    hook.add("ChatTextChanged", "UpdateTyping", function(text)
+        if isTyping and text ~= lastText then
+            lastText = text
+            if text and text ~= "" then
+                net.start("chatTextUpdate")
+                net.writeString(text)
+                net.send()
+            end
+        end
+    end)
+    
+    hook.add("StartChat", "StartTyping", function(isTeamChat)
+        isTyping = true
+        lastText = ""
+    end)
+    
+    hook.add("FinishChat", "FinishTyping", function()
+        if isTyping then
+            isTyping = false
+            net.start("chatFinish")
+            net.send()
+        end
+    end)
+    
+end
