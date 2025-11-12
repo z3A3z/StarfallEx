@@ -6,6 +6,7 @@
 local HoloText = require("holotext.txt")
 
 local playerTexts = {}
+local playerCache = {} -- Cache for player positions and angles
 local scatteringChars = {}
 local typingOffset = Vector(0, 0, 80)
 
@@ -35,8 +36,8 @@ if SERVER then
     
     local function createTextDisplay(ply, text)
         if playerTexts[ply] then
-            if playerTexts[ply].chars then
-                for k, v in pairs(playerTexts[ply].chars) do
+            if playerTexts[ply].textObj and playerTexts[ply].textObj.chars then
+                for k, v in pairs(playerTexts[ply].textObj.chars) do
                     if v[2] and v[2]:isValid() then
                         v[2]:remove()
                     end
@@ -44,37 +45,50 @@ if SERVER then
             end
             playerTexts[ply] = nil
         end
-        
+
         if text and text ~= "" then
             local playerPos = ply:getPos()
             local ang = Angle(0, ply:getAngles().yaw + 90, 0)
-            
+
             local textWidth = getTextWidth(text) * 0.5
             local centerOffset = Vector(-textWidth / 2, 0, 0):getRotated(ang)
-            
+
             local pos = playerPos + typingOffset + centerOffset
-            
-            playerTexts[ply] = HoloText:new(text, pos, ang, Vector(0.5), Color(0, 255, 0))
-            playerTexts[ply]:setMaterial("models/debug/debugwhite")
+
+            local textObj = HoloText:new(text, pos, ang, Vector(0.5), Color(0, 255, 0))
+            textObj:setMaterial("models/debug/debugwhite")
+
+            -- Cache text width and store in playerTexts
+            playerTexts[ply] = {
+                textObj = textObj,
+                textWidth = textWidth,
+                text = text
+            }
+
+            -- Initialize cache with current position/angle
+            playerCache[ply] = {
+                pos = playerPos,
+                yaw = ply:getAngles().yaw
+            }
         end
     end
     
     -- Start scattering animation
     local function startScatter(ply)
         local currentText = playerTexts[ply]
-        if not currentText or not currentText.chars then return end
-        
-        for i = 1, #currentText.chars do
-            if currentText.chars[i][2] then
-                local holo = currentText.chars[i][2]
-                local char = currentText.chars[i][1]
-                
+        if not currentText or not currentText.textObj or not currentText.textObj.chars then return end
+
+        for i = 1, #currentText.textObj.chars do
+            if currentText.textObj.chars[i][2] then
+                local holo = currentText.textObj.chars[i][2]
+                local char = currentText.textObj.chars[i][1]
+
                 local velocity = Vector(
                     math.random(-scatterSpeed, scatterSpeed),
                     math.random(-scatterSpeed, scatterSpeed),
                     math.random(50, 150)
                 )
-                
+
                 table.insert(scatteringChars, {
                     holo = holo,
                     char = char,
@@ -84,41 +98,46 @@ if SERVER then
                 })
             end
         end
-        
-        currentText.chars = {}
+
+        currentText.textObj.chars = {}
         playerTexts[ply] = nil
+        playerCache[ply] = nil
     end
     
     local function updateScatter()
         local curTime = timer.curtime()
-        
+        local frametime = timer.frametime()
+
         for i = #scatteringChars, 1, -1 do
             local scatter = scatteringChars[i]
+
+            -- Early exit if holo is invalid
+            if not scatter.holo or not scatter.holo:isValid() then
+                table.remove(scatteringChars, i)
+                continue
+            end
+
             local elapsed = curTime - scatter.startTime
-            
+
             if elapsed >= scatterDuration then
-                if scatter.holo and scatter.holo:isValid() then
-                    scatter.holo:remove()
-                end
+                scatter.holo:remove()
                 table.remove(scatteringChars, i)
             else
-                if scatter.holo and scatter.holo:isValid() then
-                    local progress = elapsed / scatterDuration
-                    
-                    scatter.velocity.z = scatter.velocity.z + scatterGravity * timer.frametime()
-                    local newPos = scatter.holo:getPos() + scatter.velocity * timer.frametime()
-                    scatter.holo:setPos(newPos)
-                    
-                    local newAng = scatter.holo:getAngles()
-                    newAng:rotateAroundAxis(Vector(1, 0, 0), math.random(-5, 5))
-                    newAng:rotateAroundAxis(Vector(0, 1, 0), math.random(-5, 5))
-                    newAng:rotateAroundAxis(Vector(0, 0, 1), math.random(-5, 5))
-                    scatter.holo:setAngles(newAng)
-                    
-                    local alpha = math.floor(255 * (1 - progress))
-                    local col = scatter.holo:getColor()
-                    scatter.holo:setColor(Color(col.r, col.g, col.b, alpha))
-                end
+                local progress = elapsed / scatterDuration
+
+                scatter.velocity.z = scatter.velocity.z + scatterGravity * frametime
+                local newPos = scatter.holo:getPos() + scatter.velocity * frametime
+                scatter.holo:setPos(newPos)
+
+                local newAng = scatter.holo:getAngles()
+                newAng:rotateAroundAxis(Vector(1, 0, 0), math.random(-5, 5))
+                newAng:rotateAroundAxis(Vector(0, 1, 0), math.random(-5, 5))
+                newAng:rotateAroundAxis(Vector(0, 0, 1), math.random(-5, 5))
+                scatter.holo:setAngles(newAng)
+
+                local alpha = math.floor(255 * (1 - progress))
+                local col = scatter.holo:getColor()
+                scatter.holo:setColor(Color(col.r, col.g, col.b, alpha))
             end
         end
     end
@@ -134,27 +153,43 @@ if SERVER then
         if #scatteringChars > 0 then
             updateScatter()
         end
-        
+
         for ply, currentText in pairs(playerTexts) do
-            if ply:isValid() and currentText then
-                local playerPos = ply:getPos()
-                local ang = Angle(0, ply:getAngles().yaw + 90, 0)
-                
-                local textWidth = getTextWidth(currentText.text) * 0.5
-                local centerOffset = Vector(-textWidth / 2, 0, 0):getRotated(ang)
-                
+            if not ply:isValid() then
+                playerTexts[ply] = nil
+                playerCache[ply] = nil
+                continue
+            end
+
+            local cache = playerCache[ply]
+            if not cache then continue end
+
+            local playerPos = ply:getPos()
+            local yaw = ply:getAngles().yaw
+
+            -- Only update if position or angle changed
+            local posChanged = cache.pos ~= playerPos
+            local yawChanged = math.abs(cache.yaw - yaw) > 0.1
+
+            if posChanged or yawChanged then
+                local ang = Angle(0, yaw + 90, 0)
+                local centerOffset = Vector(-currentText.textWidth / 2, 0, 0):getRotated(ang)
                 local pos = playerPos + typingOffset + centerOffset
-                
-                currentText:setPos(pos)
-                currentText:setAngles(ang)
+
+                currentText.textObj:setPos(pos)
+                currentText.textObj:setAngles(ang)
+
+                -- Update cache
+                cache.pos = playerPos
+                cache.yaw = yaw
             end
         end
     end)
     
     hook.add("PlayerDisconnected", "CleanupText", function(ply)
         if playerTexts[ply] then
-            if playerTexts[ply].chars then
-                for k, v in pairs(playerTexts[ply].chars) do
+            if playerTexts[ply].textObj and playerTexts[ply].textObj.chars then
+                for k, v in pairs(playerTexts[ply].textObj.chars) do
                     if v[2] and v[2]:isValid() then
                         v[2]:remove()
                     end
@@ -162,26 +197,35 @@ if SERVER then
             end
             playerTexts[ply] = nil
         end
+        playerCache[ply] = nil
     end)
     
     
 else
-    
-    if not hasPermission("input", "Need input permission to detect chat") then 
+
+    if not hasPermission("input", "Need input permission to detect chat") then
         print("Need input permission!")
-        return 
+        return
     end
-    
+
     local isTyping = false
     local lastText = ""
-    
+    local lastSentText = ""
+    local lastUpdateTime = 0
+    local updateThrottle = 0.05 -- Only send updates every 50ms
+
     hook.add("ChatTextChanged", "UpdateTyping", function(text)
         if isTyping and text ~= lastText then
             lastText = text
-            if text and text ~= "" then
+
+            -- Throttle network updates to reduce CPU usage
+            local curTime = timer.curtime()
+            if text and text ~= "" and text ~= lastSentText and (curTime - lastUpdateTime) >= updateThrottle then
                 net.start("chatTextUpdate")
                 net.writeString(text)
                 net.send()
+                lastSentText = text
+                lastUpdateTime = curTime
             end
         end
     end)
@@ -189,13 +233,17 @@ else
     hook.add("StartChat", "StartTyping", function(isTeamChat)
         isTyping = true
         lastText = ""
+        lastSentText = ""
+        lastUpdateTime = 0
     end)
-    
+
     hook.add("FinishChat", "FinishTyping", function()
         if isTyping then
             isTyping = false
             net.start("chatFinish")
             net.send()
+            lastText = ""
+            lastSentText = ""
         end
     end)
     
