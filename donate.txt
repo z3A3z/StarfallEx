@@ -1,0 +1,121 @@
+--@name Donate
+--@author
+--@shared
+
+if SERVER then
+    -- Receive donation requests from clients
+    net.receive("DonateButton_Request", function(_, ply)
+        if not isValid(ply) then return end
+        local amount = net.readUInt(16) or 100
+        local receiver = owner()
+
+        if not isValid(receiver) then
+            net.start("DonateButton_Result")
+            net.writeString("Donation failed: invalid receiver.")
+            net.send(ply)
+            return
+        end
+
+        -- Check if we can make a money request
+        if not economy.canMakeMoneyRequest(ply) then
+            net.start("DonateButton_Result")
+            net.writeString("Please wait before making another donation request.")
+            net.send(ply)
+            return
+        end
+
+        -- Request money transfer (player -> chip owner)
+        economy.requestMoney(ply, amount, "Donation to " .. receiver:getName(),
+            function()
+                net.start("DonateButton_Result")
+                net.writeString("Thank you for donating $" .. amount .. "!")
+                net.send(ply)
+            end,
+            function(err)
+                net.start("DonateButton_Result")
+                net.writeString("Donation failed: " .. tostring(err))
+                net.send(ply)
+            end
+        )
+    end)
+end
+
+if CLIENT then
+    if not render then return end
+
+    local DONATE_AMOUNT = 100
+    local screenW, screenH = 1024, 1024
+
+    -- Colors
+    local COLOR_BG = Color(20, 20, 30)
+    local COLOR_BTN = Color(70, 130, 230)
+    local COLOR_BTN_HOVER = Color(90, 150, 250)
+    local COLOR_TEXT = Color(255, 255, 255)
+
+    local font = render.createFont("Arial", 48, 700, true)
+    local usePressed = false
+    local message = ""
+    local msgShowUntil = 0
+
+    hook.add("render", "DonateButton_Render", function()
+        local success, w, h = pcall(render.getResolution)
+        if not success then return end
+        screenW, screenH = w, h
+
+        -- Background
+        render.setColor(COLOR_BG)
+        render.drawRect(0, 0, screenW, screenH)
+
+        -- Button setup
+        local buttonW, buttonH = 400, 120
+        local buttonX = screenW / 2 - buttonW / 2
+        local buttonY = screenH / 2 - buttonH / 2
+
+        -- Get cursor position (may be nil if not looking at screen)
+        local cx, cy = render.cursorPos()
+        local hover = false
+
+        -- Only check hover if cursor is valid
+        if cx and cy then
+            hover = cx >= buttonX and cx <= buttonX + buttonW and
+                    cy >= buttonY and cy <= buttonY + buttonH
+        end
+
+        -- Draw button
+        render.setColor(hover and COLOR_BTN_HOVER or COLOR_BTN)
+        render.drawRect(buttonX, buttonY, buttonW, buttonH)
+
+        -- Draw text
+        render.setFont(font)
+        render.setColor(COLOR_TEXT)
+        local text = "Donate $" .. DONATE_AMOUNT
+        local tw, th = render.getTextSize(text)
+        render.drawText(buttonX + buttonW/2 - tw/2, buttonY + buttonH/2 - th/2, text)
+
+        -- Handle interaction (only when cursor is valid and hovering)
+        if player():keyDown(IN_KEY.USE) then
+            if not usePressed and hover and cx and cy then
+                usePressed = true
+                net.start("DonateButton_Request")
+                net.writeUInt(DONATE_AMOUNT, 16)
+                net.send()
+            end
+        else
+            usePressed = false
+        end
+
+        -- Display confirmation/error message
+        if timer.curtime() < msgShowUntil then
+            render.setFont(render.createFont("Arial", 32, 600, true))
+            render.setColor(COLOR_TEXT)
+            local tw2, th2 = render.getTextSize(message)
+            render.drawText(screenW/2 - tw2/2, screenH - 100, message)
+        end
+    end)
+
+    -- Server response
+    net.receive("DonateButton_Result", function()
+        message = net.readString()
+        msgShowUntil = timer.curtime() + 3
+    end)
+end
