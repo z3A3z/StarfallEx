@@ -224,7 +224,7 @@ if SERVER then
             for i = 1, #currentText.textObj.chars do
                 local charData = currentText.textObj.chars[i]
                 if charData[1] == " " then
-                    offset = offset + spaceWidth * 0.5
+                    offset = offset + spaceWidth
                 elseif charData[1] == "\n" then
                     -- Skip newlines
                 elseif charData[2] and charData[2]:isValid() then
