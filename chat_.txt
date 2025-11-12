@@ -16,10 +16,9 @@ local scatterGravity = -200
 
 -- Visual effect settings
 local fadeInDuration = 0.3 -- Time for letters to fade in
-local waveAmplitude = 2 -- How high the wave goes
-local waveSpeed = 3 -- Speed of wave motion
+local waveAmplitude = 0.5 -- How high the wave goes (reduced for subtlety)
+local waveSpeed = 2 -- Speed of wave motion
 local bounceRestitution = 0.6 -- Bounce dampening (0.6 = 60% energy retained)
-local groundLevel = 0 -- Ground Z level for bouncing
 
 local function getTextWidth(text)
     if not text or text == "" then return 0 end
@@ -62,16 +61,8 @@ if SERVER then
 
             local pos = playerPos + typingOffset + centerOffset
 
-            local textObj = HoloText:new(text, pos, ang, Vector(0.5), Color(0, 255, 0))
+            local textObj = HoloText:new(text, pos, ang, Vector(0.5), Color(0, 255, 0, 0))
             textObj:setMaterial("models/debug/debugwhite")
-
-            -- Set initial alpha to 0 for fade-in effect
-            for i = 1, #textObj.chars do
-                if textObj.chars[i][2] and textObj.chars[i][2]:isValid() then
-                    local col = textObj.chars[i][2]:getColor()
-                    textObj.chars[i][2]:setColor(Color(col.r, col.g, col.b, 0))
-                end
-            end
 
             -- Cache text width and store in playerTexts
             playerTexts[ply] = {
@@ -207,39 +198,28 @@ if SERVER then
             -- Calculate fade-in progress
             local fadeProgress = math.min((curTime - currentText.createTime) / fadeInDuration, 1)
 
-            -- Check if position or angle changed
+            -- Only update if position or angle changed
             local posChanged = cache.pos ~= playerPos
             local yawChanged = math.abs(cache.yaw - yaw) > 0.1
 
-            -- Update base position and angle using HoloText methods
-            local ang = Angle(0, yaw + 90, 0)
-            local centerOffset = Vector(-currentText.textWidth / 2, 0, 0):getRotated(ang)
-            local basePos = playerPos + typingOffset + centerOffset
+            if posChanged or yawChanged then
+                local ang = Angle(0, yaw + 90, 0)
+                local centerOffset = Vector(-currentText.textWidth / 2, 0, 0):getRotated(ang)
+                local pos = playerPos + typingOffset + centerOffset
 
-            currentText.textObj:setPos(basePos)
-            currentText.textObj:setAngles(ang)
+                currentText.textObj:setPos(pos)
+                currentText.textObj:setAngles(ang)
 
-            -- Now apply wave motion and fade-in to each character
-            for i = 1, #currentText.textObj.chars do
-                local charData = currentText.textObj.chars[i]
-                if charData[2] and charData[2]:isValid() and charData[1] ~= " " and charData[1] ~= "\n" then
-                    -- Get the position that HoloText set
-                    local charPos = charData[2]:getPos()
-
-                    -- Add wave motion offset
-                    local waveOffset = math.sin(curTime * waveSpeed + i * 0.3) * waveAmplitude
-                    charData[2]:setPos(charPos + Vector(0, 0, waveOffset))
-
-                    -- Fade-in effect
-                    local currentAlpha = math.floor(255 * fadeProgress)
-                    local col = Color(0, 255, 0)
-                    charData[2]:setColor(Color(col.r, col.g, col.b, currentAlpha))
-                end
+                -- Update cache
+                cache.pos = playerPos
+                cache.yaw = yaw
             end
 
-            -- Update cache
-            if posChanged then cache.pos = playerPos end
-            if yawChanged then cache.yaw = yaw end
+            -- Apply fade-in effect
+            if fadeProgress < 1 then
+                local currentAlpha = math.floor(255 * fadeProgress)
+                currentText.textObj:setColour(Color(0, 255, 0, currentAlpha))
+            end
         end
     end)
     
