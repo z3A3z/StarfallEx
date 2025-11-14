@@ -232,8 +232,9 @@ if CLIENT then
         end
     end)
 
-    -- Track mouse
-    hook.add("think", "trackDrawing", function()
+    -- Main render hook (runs when screen is linked)
+    hook.add("render", "drawGame", function()
+        -- Track mouse while drawing (must be in render hook)
         if isDrawing then
             local x, y = render.cursorPos()
             if x and y then
@@ -252,10 +253,6 @@ if CLIENT then
                 end
             end
         end
-    end)
-
-    -- Main render hook (runs when screen is linked)
-    hook.add("render", "drawGame", function()
         -- Background
         render.setColor(COLOR_BG_DARK)
         render.drawRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
