@@ -5,14 +5,19 @@
 
 --[[
     Perfect Circle Challenge
-
     A multiplayer game where players compete to draw the most perfect circle!
 
+    SETUP:
+    1. Spawn this Starfall Processor chip
+    2. Spawn a Starfall Screen
+    3. Link the screen to this chip using the Starfall tool
+    4. Players look at the screen and press USE (E) to draw!
+
     HOW TO PLAY:
-    - Look at the screen chip
-    - Hold left mouse button and drag to draw a circle
-    - Release to submit and get scored
-    - Perfect circle = 100 points, imperfect = less
+    - Look at the screen and press E to start drawing
+    - Move your mouse in a circle
+    - Press E again to submit and get scored
+    - Try to draw the most perfect circle!
 
     FEATURES:
     - Multiplayer - everyone sees all drawings
@@ -22,16 +27,20 @@
 ]]
 
 -- Configuration
-local DRAW_TIME = 3 -- seconds to keep drawings visible
-local MIN_POINTS = 10 -- minimum points to draw before scoring
+local DRAW_TIME = 4 -- seconds to keep drawings visible
+local MIN_POINTS = 15 -- minimum points to draw before scoring
 local CANVAS_SIZE = 512 -- size of drawing area
 
--- Game state
+-- Game state (shared)
 local drawings = {} -- Current active drawings
 local scores = {} -- Player scores: {playerName = score}
-local currentDrawing = {} -- Current points being drawn by local player
-local isDrawing = false
-local startTime = 0
+
+-- Client state
+if CLIENT then
+    -- Per-player drawing state
+    playerDrawings = {}
+    playerScores = {}
+end
 
 -- Colors
 local COLOR_BACKGROUND = Color(20, 20, 30)
@@ -71,7 +80,7 @@ local function evaluateCircle(points)
     avgRadius = avgRadius / #points
 
     -- Prevent division by zero for tiny circles
-    if avgRadius < 5 then
+    if avgRadius < 10 then
         return 0, "Circle too small!"
     end
 
@@ -86,10 +95,9 @@ local function evaluateCircle(points)
     local stdDev = math.sqrt(variance)
 
     -- Score based on consistency (lower stdDev = more perfect)
-    -- Perfect circle has stdDev near 0
     local consistency = math.max(0, 100 - (stdDev / avgRadius) * 200)
 
-    -- Check if drawing is somewhat closed (start and end points close)
+    -- Check if drawing is closed (start and end points close)
     local closeness = 0
     if #points >= 2 then
         local startPoint = points[1]
@@ -105,7 +113,7 @@ local function evaluateCircle(points)
     -- Generate feedback message
     local message = ""
     if finalScore >= 90 then
-        message = "PERFECT! You're a circle master!"
+        message = "PERFECT! Circle master!"
     elseif finalScore >= 75 then
         message = "Great circle! Very round!"
     elseif finalScore >= 50 then
@@ -128,17 +136,23 @@ local function getScoreColor(score)
     end
 end
 
--- Server-side networking
+--------------------------------------------------------------------------------
+-- SERVER
+--------------------------------------------------------------------------------
 if SERVER then
-    -- Net message to broadcast drawing to all clients
+    -- Network messages
     net.receive("submitDrawing", function(len, ply)
         local points = net.readTable()
         local score = net.readFloat()
         local playerName = ply:getName()
+        local steamID = ply:getSteamID()
 
         -- Update player's best score
-        if not scores[playerName] or score > scores[playerName] then
-            scores[playerName] = score
+        if not scores[steamID] or score > scores[steamID].score then
+            scores[steamID] = {
+                name = playerName,
+                score = score
+            }
         end
 
         -- Broadcast to all clients
@@ -149,23 +163,22 @@ if SERVER then
         net.send()
     end)
 
-    -- Send leaderboard on request
-    net.receive("requestLeaderboard", function(len, ply)
-        net.start("receiveLeaderboard")
+    -- Send scores on request
+    net.receive("requestScores", function(len, ply)
+        net.start("receiveScores")
         net.writeTable(scores)
         net.send(ply)
     end)
 end
 
--- Client-side rendering and input
+--------------------------------------------------------------------------------
+-- CLIENT
+--------------------------------------------------------------------------------
 if CLIENT then
-    -- Request leaderboard on spawn
-    hook.add("ClientInitialized", "requestLeaderboard", function()
-        timer.simple(1, function()
-            net.start("requestLeaderboard")
-            net.send()
-        end)
-    end)
+    -- Local drawing state for this client
+    local myCurrentPoints = {}
+    local isDrawingNow = false
+    local lastMousePos = {x = 0, y = 0}
 
     -- Receive drawing from server
     net.receive("receiveDrawing", function()
@@ -173,8 +186,8 @@ if CLIENT then
         local points = net.readTable()
         local score = net.readFloat()
 
-        -- Add to active drawings
-        table.insert(drawings, {
+        -- Add to drawings list
+        table.insert(playerDrawings, {
             playerName = playerName,
             points = points,
             score = score,
@@ -183,52 +196,87 @@ if CLIENT then
         })
     end)
 
-    -- Receive leaderboard update
-    net.receive("receiveLeaderboard", function()
-        scores = net.readTable()
+    -- Receive scores from server
+    net.receive("receiveScores", function()
+        playerScores = net.readTable()
     end)
 
-    -- Input handling for drawing
-    hook.add("inputPressed", "startDrawing", function(button)
-        if button == MOUSE.MOUSE1 and render.cursorVisible() then
-            isDrawing = true
-            currentDrawing = {}
-            startTime = timer.curtime()
-        end
+    -- Request scores on start
+    hook.add("initialize", "requestScores", function()
+        timer.simple(0.5, function()
+            net.start("requestScores")
+            net.send()
+        end)
     end)
 
-    hook.add("inputReleased", "endDrawing", function(button)
-        if button == MOUSE.MOUSE1 and isDrawing then
-            isDrawing = false
+    -- Handle key press to toggle drawing
+    hook.add("KeyPress", "toggleDrawing", function(ply, key)
+        if ply ~= player() then return end
 
-            if #currentDrawing >= MIN_POINTS then
-                -- Evaluate the circle
-                local score, message = evaluateCircle(currentDrawing)
+        if key == KEY.E then
+            if not isDrawingNow then
+                -- Start drawing
+                isDrawingNow = true
+                myCurrentPoints = {}
+                print("Started drawing! Move your mouse in a circle, press E to submit!")
+            else
+                -- End drawing and submit
+                isDrawingNow = false
 
-                -- Send to server
-                net.start("submitDrawing")
-                net.writeTable(currentDrawing)
-                net.writeFloat(score)
-                net.send()
+                if #myCurrentPoints >= MIN_POINTS then
+                    local score, message = evaluateCircle(myCurrentPoints)
 
-                -- Show local feedback
-                print(message .. " Score: " .. score)
+                    -- Send to server
+                    net.start("submitDrawing")
+                    net.writeTable(myCurrentPoints)
+                    net.writeFloat(score)
+                    net.send()
 
-                -- Add to local drawings
-                table.insert(drawings, {
-                    playerName = player():getName(),
-                    points = currentDrawing,
-                    score = score,
-                    time = timer.curtime(),
-                    color = getScoreColor(score)
-                })
+                    print(message .. " Score: " .. score)
+
+                    -- Add to local display
+                    table.insert(playerDrawings, {
+                        playerName = player():getName(),
+                        points = myCurrentPoints,
+                        score = score,
+                        time = timer.curtime(),
+                        color = getScoreColor(score)
+                    })
+                else
+                    print("Not enough points! Need at least " .. MIN_POINTS)
+                end
+
+                myCurrentPoints = {}
             end
-
-            currentDrawing = {}
         end
     end)
 
-    -- Render loop
+    -- Track mouse movement while drawing
+    hook.add("think", "trackDrawing", function()
+        if isDrawingNow then
+            local x, y = render.cursorPos()
+
+            if x and y then
+                -- Clamp to canvas
+                x = math.clamp(x, 0, CANVAS_SIZE)
+                y = math.clamp(y, 0, CANVAS_SIZE)
+
+                -- Only add if moved enough
+                if #myCurrentPoints == 0 then
+                    table.insert(myCurrentPoints, {x = x, y = y})
+                    lastMousePos = {x = x, y = y}
+                else
+                    local dist = distance(lastMousePos.x, lastMousePos.y, x, y)
+                    if dist > 2 then
+                        table.insert(myCurrentPoints, {x = x, y = y})
+                        lastMousePos = {x = x, y = y}
+                    end
+                end
+            end
+        end
+    end)
+
+    -- Main render loop
     hook.add("render", "drawGame", function()
         -- Clear background
         render.setColor(COLOR_BACKGROUND)
@@ -241,128 +289,113 @@ if CLIENT then
             render.drawLine(0, i, CANVAS_SIZE, i)
         end
 
-        -- Draw center circle guide
-        render.setColor(Color(100, 100, 150, 50))
+        -- Draw center guide circle
+        render.setColor(Color(100, 100, 150, 30))
         render.drawCircle(CANVAS_SIZE/2, CANVAS_SIZE/2, 150)
 
-        -- Draw instructions
+        -- Title and instructions
         render.setColor(Color(255, 255, 255))
-        render.drawSimpleText(10, 10, "PERFECT CIRCLE CHALLENGE", "DermaLarge")
-        render.drawSimpleText(10, 40, "Click and drag to draw a circle!", "DermaDefault")
+        render.setFont("DermaLarge")
+        render.drawText(CANVAS_SIZE/2, 15, "PERFECT CIRCLE CHALLENGE", 1)
 
-        -- Update and draw active drawings from other players
+        render.setFont("DermaDefault")
+        render.setColor(Color(200, 200, 255))
+        render.drawText(CANVAS_SIZE/2, 45, "Press E to start drawing, E again to submit!", 1)
+
+        -- Draw all active drawings
         local currentTime = timer.curtime()
-        for i = #drawings, 1, -1 do
-            local drawing = drawings[i]
+        for i = #playerDrawings, 1, -1 do
+            local drawing = playerDrawings[i]
 
             -- Remove old drawings
             if currentTime - drawing.time > DRAW_TIME then
-                table.remove(drawings, i)
+                table.remove(playerDrawings, i)
             else
-                -- Fade out over time
+                -- Fade out
                 local age = currentTime - drawing.time
                 local alpha = math.floor(255 * (1 - age / DRAW_TIME))
 
-                -- Draw the points
-                render.setColor(Color(drawing.color.r, drawing.color.g, drawing.color.b, alpha))
+                -- Draw lines
+                local col = drawing.color
+                render.setColor(Color(col.r, col.g, col.b, alpha))
+
                 for j = 1, #drawing.points - 1 do
                     local p1 = drawing.points[j]
                     local p2 = drawing.points[j + 1]
                     render.drawLine(p1.x, p1.y, p2.x, p2.y)
                 end
 
-                -- Draw score label
+                -- Draw score label near the drawing
                 if #drawing.points > 0 then
-                    local centerX = drawing.points[1].x
-                    local centerY = drawing.points[1].y
+                    local centerX, centerY = 0, 0
+                    for _, p in ipairs(drawing.points) do
+                        centerX = centerX + p.x
+                        centerY = centerY + p.y
+                    end
+                    centerX = centerX / #drawing.points
+                    centerY = centerY / #drawing.points
+
                     render.setColor(Color(255, 255, 255, alpha))
-                    render.drawSimpleText(centerX, centerY - 20, drawing.playerName, "DermaDefault")
-                    render.drawSimpleText(centerX, centerY, "Score: " .. math.floor(drawing.score), "DermaDefault")
+                    render.setFont("DermaDefault")
+                    render.drawText(centerX, centerY - 15, drawing.playerName, 1)
+                    render.drawText(centerX, centerY + 5, math.floor(drawing.score), 1)
                 end
             end
         end
 
-        -- Draw current drawing in progress
-        if isDrawing and #currentDrawing > 0 then
-            render.setColor(Color(255, 255, 255))
-            for i = 1, #currentDrawing - 1 do
-                local p1 = currentDrawing[i]
-                local p2 = currentDrawing[i + 1]
+        -- Draw current in-progress drawing
+        if isDrawingNow and #myCurrentPoints > 0 then
+            render.setColor(Color(255, 255, 255, 255))
+            for i = 1, #myCurrentPoints - 1 do
+                local p1 = myCurrentPoints[i]
+                local p2 = myCurrentPoints[i + 1]
                 render.drawLine(p1.x, p1.y, p2.x, p2.y)
             end
 
             -- Show point count
-            render.drawSimpleText(10, 70, "Points: " .. #currentDrawing, "DermaDefault")
+            render.setColor(Color(255, 255, 0))
+            render.setFont("DermaDefault")
+            render.drawText(10, 75, "Points: " .. #myCurrentPoints .. " / " .. MIN_POINTS, 0)
+
+            if #myCurrentPoints >= MIN_POINTS then
+                render.setColor(Color(0, 255, 0))
+                render.drawText(10, 95, "Ready! Press E to submit", 0)
+            end
         end
 
         -- Draw leaderboard
-        local y = CANVAS_SIZE - 200
-        render.setColor(Color(0, 0, 0, 180))
-        render.drawRect(10, y - 10, 220, 200)
+        local leaderY = CANVAS_SIZE - 210
+        render.setColor(Color(0, 0, 0, 200))
+        render.drawRect(10, leaderY, 230, 200)
 
         render.setColor(Color(255, 255, 255))
-        render.drawSimpleText(15, y, "LEADERBOARD", "DermaDefault")
+        render.setFont("DermaDefaultBold")
+        render.drawText(125, leaderY + 10, "LEADERBOARD", 1)
 
         -- Sort scores
         local sortedScores = {}
-        for name, score in pairs(scores) do
-            table.insert(sortedScores, {name = name, score = score})
+        for steamID, data in pairs(playerScores) do
+            table.insert(sortedScores, data)
         end
         table.sort(sortedScores, function(a, b) return a.score > b.score end)
 
         -- Display top 5
-        y = y + 25
+        render.setFont("DermaDefault")
+        local y = leaderY + 35
         for i = 1, math.min(5, #sortedScores) do
             local entry = sortedScores[i]
             local color = getScoreColor(entry.score)
             render.setColor(color)
-            render.drawSimpleText(15, y, i .. ". " .. entry.name .. ": " .. math.floor(entry.score), "DermaDefault")
-            y = y + 20
+            render.drawText(20, y, i .. ". " .. entry.name .. ": " .. math.floor(entry.score), 0)
+            y = y + 25
         end
 
         if #sortedScores == 0 then
             render.setColor(Color(150, 150, 150))
-            render.drawSimpleText(15, y, "No scores yet!", "DermaDefault")
+            render.drawText(125, y, "No scores yet!", 1)
         end
-    end)
-
-    -- Track mouse position while drawing
-    hook.add("think", "captureDrawing", function()
-        if isDrawing and render.cursorVisible() then
-            local cursorX, cursorY = render.cursorPos()
-
-            -- Only add point if moved enough (smoothing)
-            if #currentDrawing == 0 then
-                table.insert(currentDrawing, {x = cursorX, y = cursorY})
-            else
-                local lastPoint = currentDrawing[#currentDrawing]
-                local dist = distance(lastPoint.x, lastPoint.y, cursorX, cursorY)
-
-                -- Add point if moved at least 3 pixels
-                if dist > 3 then
-                    table.insert(currentDrawing, {x = cursorX, y = cursorY})
-                end
-            end
-        end
-    end)
-
-    -- Enable screen interaction
-    render.createRenderTarget("circle_game")
-
-    hook.add("renderOffscreen", "setupRT", function()
-        render.selectRenderTarget("circle_game")
-    end)
-
-    hook.add("drawhud", "showCursor", function()
-        -- This makes cursor visible when looking at the screen
     end)
 end
 
--- Initialize
-if CLIENT then
-    -- Set up screen rendering
-    enableHud(nil, true)
-    render.createRenderTarget("screen")
-end
-
-print("Perfect Circle Challenge loaded! Look at a Starfall Screen to play!")
+print("Perfect Circle Challenge loaded!")
+print("Link this chip to a Starfall Screen, then look at the screen and press E to play!")
