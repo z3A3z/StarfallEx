@@ -57,14 +57,8 @@ if CLIENT then
     -- Configuration
     local DRAW_TIME = 5
     local MIN_POINTS = 15
-
-    -- Get screen entity
-    local screen = render.getScreenEntity()
-    if not screen then return end
-
-    -- Use screen's actual resolution
-    local CANVAS_WIDTH = 1024
-    local CANVAS_HEIGHT = 1024
+    local CANVAS_WIDTH = 512  -- Standard Starfall screen resolution
+    local CANVAS_HEIGHT = 512
 
     -- Game state
     local playerDrawings = {}
@@ -138,17 +132,17 @@ if CLIENT then
 
         local message = ""
         if finalScore >= 95 then
-            message = "FLAWLESS CIRCLE!"
+            message = "FLAWLESS!"
         elseif finalScore >= 85 then
             message = "Nearly Perfect!"
         elseif finalScore >= 70 then
-            message = "Great Job!"
+            message = "Great!"
         elseif finalScore >= 50 then
             message = "Not Bad!"
         elseif finalScore >= 30 then
             message = "Keep Trying..."
         else
-            message = "Abstract Art?"
+            message = "Abstract?"
         end
 
         return finalScore, message
@@ -161,29 +155,6 @@ if CLIENT then
         elseif score >= 50 then return COLOR_OKAY
         else return COLOR_BAD
         end
-    end
-
-    -- Draw gradient bar
-    local function drawGradientBar(x, y, w, h, percent, colorStart, colorEnd)
-        local fillWidth = w * (percent / 100)
-
-        render.setColor(Color(30, 30, 40, 200))
-        render.drawRect(x, y, w, h)
-
-        for i = 0, fillWidth, 2 do
-            local t = i / w
-            local r = colorStart.r + (colorEnd.r - colorStart.r) * t
-            local g = colorStart.g + (colorEnd.g - colorStart.g) * t
-            local b = colorStart.b + (colorEnd.b - colorStart.b) * t
-            render.setColor(Color(r, g, b))
-            render.drawRect(x + i, y, 2, h)
-        end
-
-        render.setColor(Color(60, 60, 80))
-        render.drawRect(x, y, w, 2)
-        render.drawRect(x, y + h - 2, w, 2)
-        render.drawRect(x, y, 2, h)
-        render.drawRect(x + w - 2, y, 2, h)
     end
 
     -- Network receivers
@@ -283,7 +254,7 @@ if CLIENT then
         end
     end)
 
-    -- Main render
+    -- Main render hook (runs when screen is linked)
     hook.add("render", "drawGame", function()
         -- Background
         render.setColor(COLOR_BG_DARK)
@@ -291,42 +262,33 @@ if CLIENT then
 
         -- Grid
         render.setColor(COLOR_GRID)
-        for i = 0, CANVAS_WIDTH, 128 do
+        for i = 0, CANVAS_WIDTH, 64 do
             render.drawLine(i, 0, i, CANVAS_HEIGHT)
         end
-        for i = 0, CANVAS_HEIGHT, 128 do
+        for i = 0, CANVAS_HEIGHT, 64 do
             render.drawLine(0, i, CANVAS_WIDTH, i)
         end
 
         -- Center guide circle
-        render.setColor(Color(COLOR_ACCENT.r, COLOR_ACCENT.g, COLOR_ACCENT.b, 15))
-        render.drawCircle(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, 252)
-        render.setColor(Color(COLOR_ACCENT.r, COLOR_ACCENT.g, COLOR_ACCENT.b, 30))
-        render.drawCircle(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, 250)
+        render.setColor(Color(COLOR_ACCENT.r, COLOR_ACCENT.g, COLOR_ACCENT.b, 20))
+        render.drawCircle(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, 120)
 
         -- Header
-        local headerHeight = 120
         render.setColor(Color(20, 20, 35, 230))
-        render.drawRect(0, 0, CANVAS_WIDTH, headerHeight)
+        render.drawRect(0, 0, CANVAS_WIDTH, 80)
 
         render.setColor(COLOR_ACCENT)
         render.setFont("DermaLarge")
-        local titleY = 25
-        render.drawText(CANVAS_WIDTH/2, titleY, "PERFECT CIRCLE CHALLENGE", 1)
+        render.drawText(CANVAS_WIDTH/2, 15, "PERFECT CIRCLE", 1)
 
         render.setColor(COLOR_TEXT_DIM)
         render.setFont("DermaDefault")
-        render.drawText(CANVAS_WIDTH/2, titleY + 40, "Click and drag to draw the most perfect circle!", 1)
+        render.drawText(CANVAS_WIDTH/2, 45, "Click and drag to draw!", 1)
 
         -- Drawing status
         if isDrawing then
             render.setColor(COLOR_ACCENT)
-            local progress = math.min(100, (#myCurrentPoints / MIN_POINTS) * 100)
-            render.drawText(CANVAS_WIDTH/2, titleY + 65, "Drawing... " .. #myCurrentPoints .. " points", 1)
-            drawGradientBar(CANVAS_WIDTH/2 - 150, titleY + 85, 300, 8, progress, COLOR_ACCENT_DIM, COLOR_ACCENT)
-        else
-            render.setColor(COLOR_TEXT_DIM)
-            render.drawText(CANVAS_WIDTH/2, titleY + 65, "Click and hold to start drawing", 1)
+            render.drawText(CANVAS_WIDTH/2, 65, "Drawing: " .. #myCurrentPoints .. " pts", 1)
         end
 
         -- Draw submitted circles
@@ -340,15 +302,6 @@ if CLIENT then
                 local age = currentTime - drawing.time
                 local alpha = math.floor(255 * (1 - age / DRAW_TIME))
                 local col = drawing.color
-
-                -- Glow
-                render.setColor(Color(col.r, col.g, col.b, alpha * 0.3))
-                for j = 1, #drawing.points - 1 do
-                    local p1 = drawing.points[j]
-                    local p2 = drawing.points[j + 1]
-                    render.drawLine(p1.x, p1.y + 2, p2.x, p2.y + 2)
-                    render.drawLine(p1.x, p1.y - 2, p2.x, p2.y - 2)
-                end
 
                 -- Main line
                 render.setColor(Color(col.r, col.g, col.b, alpha))
@@ -369,19 +322,19 @@ if CLIENT then
                     centerY = centerY / #drawing.points
 
                     render.setColor(Color(20, 20, 30, alpha * 0.9))
-                    render.drawRect(centerX - 60, centerY - 35, 120, 50)
+                    render.drawRect(centerX - 40, centerY - 25, 80, 40)
 
                     render.setColor(Color(255, 255, 255, alpha))
                     render.setFont("DermaDefault")
-                    render.drawText(centerX, centerY - 20, drawing.playerName, 1)
+                    render.drawText(centerX, centerY - 15, drawing.playerName, 1)
 
                     render.setColor(Color(col.r, col.g, col.b, alpha))
                     render.setFont("DermaDefaultBold")
-                    render.drawText(centerX, centerY, math.floor(drawing.score) .. " pts", 1)
+                    render.drawText(centerX, centerY, math.floor(drawing.score), 1)
 
                     render.setFont("DermaDefault")
                     render.setColor(Color(200, 200, 200, alpha))
-                    render.drawText(centerX, centerY + 15, drawing.message, 1)
+                    render.drawText(centerX, centerY + 12, drawing.message, 1)
                 end
             end
         end
@@ -395,24 +348,25 @@ if CLIENT then
                 render.drawLine(p1.x, p1.y, p2.x, p2.y)
             end
 
+            -- Start point marker
             if #myCurrentPoints > 0 then
                 local start = myCurrentPoints[1]
                 render.setColor(COLOR_ACCENT)
-                render.drawCircle(start.x, start.y, 5)
+                render.drawCircle(start.x, start.y, 4)
             end
         end
 
         -- Leaderboard
-        local boardWidth = 350
-        local boardX = CANVAS_WIDTH - boardWidth - 30
-        local boardY = headerHeight + 30
+        local boardWidth = 200
+        local boardX = CANVAS_WIDTH - boardWidth - 10
+        local boardY = 90
 
         render.setColor(Color(20, 20, 35, 240))
-        render.drawRect(boardX, boardY, boardWidth, 60)
+        render.drawRect(boardX, boardY, boardWidth, 40)
 
         render.setColor(COLOR_ACCENT)
         render.setFont("DermaDefaultBold")
-        render.drawText(boardX + 20, boardY + 20, "LEADERBOARD", 0)
+        render.drawText(boardX + 10, boardY + 12, "LEADERBOARD", 0)
 
         local sortedScores = {}
         for steamID, data in pairs(playerScores) do
@@ -420,44 +374,50 @@ if CLIENT then
         end
         table.sort(sortedScores, function(a, b) return a.score > b.score end)
 
-        local entryY = boardY + 60
+        local entryY = boardY + 40
         for i = 1, math.min(5, #sortedScores) do
             local entry = sortedScores[i]
-            local entryHeight = 50
+            local entryHeight = 35
 
-            local bgAlpha = i == 1 and 255 or 200
-            render.setColor(Color(25, 25, 40, bgAlpha))
+            render.setColor(Color(25, 25, 40, 230))
             render.drawRect(boardX, entryY, boardWidth, entryHeight)
 
+            -- Rank
             local rankColor = i == 1 and Color(255, 215, 0) or (i == 2 and Color(192, 192, 192) or Color(205, 127, 50))
             if i <= 3 then
                 render.setColor(rankColor)
-                render.drawCircle(boardX + 30, entryY + 25, 18)
+                render.drawCircle(boardX + 20, entryY + 17, 12)
                 render.setColor(Color(20, 20, 30))
                 render.setFont("DermaDefaultBold")
-                render.drawText(boardX + 30, entryY + 17, i, 1)
+                render.drawText(boardX + 20, entryY + 11, i, 1)
             else
                 render.setColor(COLOR_TEXT_DIM)
                 render.setFont("DermaDefault")
-                render.drawText(boardX + 30, entryY + 20, i, 1)
+                render.drawText(boardX + 20, entryY + 14, i, 1)
             end
 
+            -- Name
             render.setColor(COLOR_TEXT)
             render.setFont("DermaDefault")
-            render.drawText(boardX + 60, entryY + 12, entry.name, 0)
+            local nameText = entry.name
+            if #nameText > 12 then
+                nameText = string.sub(nameText, 1, 12) .. "..."
+            end
+            render.drawText(boardX + 40, entryY + 8, nameText, 0)
 
+            -- Score
             local scoreColor = getScoreColor(entry.score)
             render.setColor(scoreColor)
             render.setFont("DermaDefaultBold")
-            render.drawText(boardX + 60, entryY + 28, math.floor(entry.score) .. " points", 0)
+            render.drawText(boardX + 40, entryY + 20, math.floor(entry.score) .. " pts", 0)
 
-            entryY = entryY + entryHeight + 10
+            entryY = entryY + entryHeight + 5
         end
 
         if #sortedScores == 0 then
             render.setColor(COLOR_TEXT_DIM)
             render.setFont("DermaDefault")
-            render.drawText(boardX + boardWidth/2, boardY + 90, "No scores yet!", 1)
+            render.drawText(boardX + boardWidth/2, boardY + 60, "No scores yet!", 1)
         end
     end)
 
