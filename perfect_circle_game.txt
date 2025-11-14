@@ -173,12 +173,15 @@ if CLIENT then
             }
         end
 
+        -- Get the message for this score
+        local _, scoreMessage = evaluateCircle(points)
+
         -- Add visual drawing
         table.insert(playerDrawings, {
             playerName = playerName,
             points = points,
             score = score,
-            message = evaluateCircle(points),
+            message = scoreMessage,
             time = timer.curtime(),
             color = getScoreColor(score)
         })
