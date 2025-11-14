@@ -38,9 +38,10 @@ if SERVER then
             }
         end
 
-        -- Broadcast to all clients
+        -- Broadcast to all clients (including score update)
         net.start("receiveDrawing")
         net.writeString(playerName)
+        net.writeString(steamID)
         net.writeTable(points)
         net.writeFloat(score)
         net.send()
@@ -160,9 +161,19 @@ if CLIENT then
     -- Network receivers
     net.receive("receiveDrawing", function()
         local playerName = net.readString()
+        local steamID = net.readString()
         local points = net.readTable()
         local score = net.readFloat()
 
+        -- Update leaderboard with this player's score
+        if not playerScores[steamID] or score > playerScores[steamID].score then
+            playerScores[steamID] = {
+                name = playerName,
+                score = score
+            }
+        end
+
+        -- Add visual drawing
         table.insert(playerDrawings, {
             playerName = playerName,
             points = points,
@@ -353,17 +364,17 @@ if CLIENT then
             end
         end
 
-        -- Leaderboard
-        local boardWidth = 200
+        -- Leaderboard (narrower design)
+        local boardWidth = 160
         local boardX = CANVAS_WIDTH - boardWidth - 10
         local boardY = 90
 
         render.setColor(Color(20, 20, 35, 240))
-        render.drawRect(boardX, boardY, boardWidth, 40)
+        render.drawRect(boardX, boardY, boardWidth, 35)
 
         render.setColor(COLOR_ACCENT)
         render.setFont("DermaDefaultBold")
-        render.drawText(boardX + 10, boardY + 12, "LEADERBOARD", 0)
+        render.drawText(boardX + boardWidth/2, boardY + 10, "LEADERBOARD", 1)
 
         local sortedScores = {}
         for steamID, data in pairs(playerScores) do
@@ -371,50 +382,50 @@ if CLIENT then
         end
         table.sort(sortedScores, function(a, b) return a.score > b.score end)
 
-        local entryY = boardY + 40
+        local entryY = boardY + 35
         for i = 1, math.min(5, #sortedScores) do
             local entry = sortedScores[i]
-            local entryHeight = 35
+            local entryHeight = 32
 
             render.setColor(Color(25, 25, 40, 230))
             render.drawRect(boardX, entryY, boardWidth, entryHeight)
 
-            -- Rank
+            -- Rank medal for top 3
             local rankColor = i == 1 and Color(255, 215, 0) or (i == 2 and Color(192, 192, 192) or Color(205, 127, 50))
             if i <= 3 then
                 render.setColor(rankColor)
-                render.drawCircle(boardX + 20, entryY + 17, 12)
+                render.drawCircle(boardX + 18, entryY + 16, 10)
                 render.setColor(Color(20, 20, 30))
                 render.setFont("DermaDefaultBold")
-                render.drawText(boardX + 20, entryY + 11, i, 1)
+                render.drawText(boardX + 18, entryY + 10, i, 1)
             else
                 render.setColor(COLOR_TEXT_DIM)
                 render.setFont("DermaDefault")
-                render.drawText(boardX + 20, entryY + 14, i, 1)
+                render.drawText(boardX + 18, entryY + 13, i, 1)
             end
 
-            -- Name
+            -- Name (truncated)
             render.setColor(COLOR_TEXT)
             render.setFont("DermaDefault")
             local nameText = entry.name
-            if #nameText > 12 then
-                nameText = string.sub(nameText, 1, 12) .. "..."
+            if #nameText > 10 then
+                nameText = string.sub(nameText, 1, 10) .. "."
             end
-            render.drawText(boardX + 40, entryY + 8, nameText, 0)
+            render.drawText(boardX + 35, entryY + 6, nameText, 0)
 
             -- Score
             local scoreColor = getScoreColor(entry.score)
             render.setColor(scoreColor)
             render.setFont("DermaDefaultBold")
-            render.drawText(boardX + 40, entryY + 20, math.floor(entry.score) .. " pts", 0)
+            render.drawText(boardX + 35, entryY + 18, math.floor(entry.score) .. " pts", 0)
 
-            entryY = entryY + entryHeight + 5
+            entryY = entryY + entryHeight + 3
         end
 
         if #sortedScores == 0 then
             render.setColor(COLOR_TEXT_DIM)
             render.setFont("DermaDefault")
-            render.drawText(boardX + boardWidth/2, boardY + 60, "No scores yet!", 1)
+            render.drawText(boardX + boardWidth/2, boardY + 55, "No scores!", 1)
         end
     end)
 
