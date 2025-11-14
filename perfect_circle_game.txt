@@ -329,20 +329,19 @@ if CLIENT then
                     centerX = centerX / #drawing.points
                     centerY = centerY / #drawing.points
 
+                    -- Background box
                     render.setColor(Color(20, 20, 30, alpha * 0.9))
-                    render.drawRect(centerX - 40, centerY - 25, 80, 40)
+                    render.drawRect(centerX - 50, centerY - 30, 100, 50)
 
+                    -- Player name
                     render.setColor(Color(255, 255, 255, alpha))
                     render.setFont("DermaDefault")
-                    render.drawText(centerX, centerY - 15, drawing.playerName, 1)
+                    render.drawText(centerX, centerY - 18, drawing.playerName, 1)
 
+                    -- Score with message
                     render.setColor(Color(col.r, col.g, col.b, alpha))
                     render.setFont("DermaDefaultBold")
-                    render.drawText(centerX, centerY, math.floor(drawing.score), 1)
-
-                    render.setFont("DermaDefault")
-                    render.setColor(Color(200, 200, 200, alpha))
-                    render.drawText(centerX, centerY + 12, drawing.message, 1)
+                    render.drawText(centerX, centerY, math.floor(drawing.score) .. " - " .. drawing.message, 1)
                 end
             end
         end
