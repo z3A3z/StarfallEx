@@ -265,23 +265,50 @@ if CLIENT then
         render.setColor(COLOR_BG_DARK)
         render.drawRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
 
+        -- Helper to draw thick line segment
+        local function drawThickLine(x1, y1, x2, y2, thickness)
+            -- Calculate perpendicular offset
+            local dx = x2 - x1
+            local dy = y2 - y1
+            local len = math.sqrt(dx * dx + dy * dy)
+
+            if len > 0 then
+                -- Normalize and get perpendicular
+                local nx = -dy / len
+                local ny = dx / len
+
+                -- Calculate the 4 corners of the rectangle
+                local halfThick = thickness / 2
+                local ox = nx * halfThick
+                local oy = ny * halfThick
+
+                -- Draw filled quad using poly
+                render.drawPoly({
+                    {x = x1 + ox, y = y1 + oy},
+                    {x = x2 + ox, y = y2 + oy},
+                    {x = x2 - ox, y = y2 - oy},
+                    {x = x1 - ox, y = y1 - oy}
+                })
+            end
+        end
+
         -- Draw all strokes
         for _, stroke in ipairs(strokes) do
             render.setColor(stroke.color)
-            -- Draw circles at each point for smooth thick lines
-            for i = 1, #stroke.points do
-                local p = stroke.points[i]
-                render.drawCircle(p.x, p.y, stroke.size)
+            for i = 1, #stroke.points - 1 do
+                local p1 = stroke.points[i]
+                local p2 = stroke.points[i + 1]
+                drawThickLine(p1.x, p1.y, p2.x, p2.y, stroke.size)
             end
         end
 
         -- Draw current stroke being drawn
-        if currentStroke and #currentStroke.points > 0 then
+        if currentStroke and #currentStroke.points > 1 then
             render.setColor(currentStroke.color)
-            -- Draw circles at each point for smooth thick lines
-            for i = 1, #currentStroke.points do
-                local p = currentStroke.points[i]
-                render.drawCircle(p.x, p.y, currentStroke.size)
+            for i = 1, #currentStroke.points - 1 do
+                local p1 = currentStroke.points[i]
+                local p2 = currentStroke.points[i + 1]
+                drawThickLine(p1.x, p1.y, p2.x, p2.y, currentStroke.size)
             end
         end
 
