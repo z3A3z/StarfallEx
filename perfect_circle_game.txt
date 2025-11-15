@@ -60,6 +60,7 @@ if CLIENT then
     local MIN_POINTS = 15
     local CANVAS_WIDTH = 512  -- Standard Starfall screen resolution
     local CANVAS_HEIGHT = 512
+    local MAX_DISTANCE = 250 -- Maximum distance from chip to play game
 
     -- Game state
     local playerDrawings = {}
@@ -79,6 +80,17 @@ if CLIENT then
     local COLOR_GOOD = Color(100, 200, 255)
     local COLOR_OKAY = Color(255, 200, 50)
     local COLOR_BAD = Color(255, 100, 100)
+
+    -- Helper: Check if player is near chip
+    local function isPlayerNear()
+        local ply = player()
+        local chipEnt = chip()
+        if not ply or not chipEnt then return false end
+
+        local plyPos = ply:getPos()
+        local chipPos = chipEnt:getPos()
+        return plyPos:getDistance(chipPos) <= MAX_DISTANCE
+    end
 
     -- Helper: Calculate distance
     local function distance(x1, y1, x2, y2)
@@ -197,9 +209,48 @@ if CLIENT then
         net.send()
     end)
 
+    -- Helper: Finalize and submit drawing
+    local function finalizeDrawing()
+        if #myCurrentPoints >= MIN_POINTS then
+            local score, message = evaluateCircle(myCurrentPoints)
+
+            -- Send to server
+            net.start("submitDrawing")
+            net.writeTable(myCurrentPoints)
+            net.writeFloat(score)
+            net.send()
+
+            -- Add locally
+            table.insert(playerDrawings, {
+                playerName = player():getName(),
+                points = myCurrentPoints,
+                score = score,
+                message = message,
+                time = timer.curtime(),
+                color = getScoreColor(score)
+            })
+
+            -- Update local score
+            local steamID = player():getSteamID()
+            if not playerScores[steamID] or score > playerScores[steamID].score then
+                playerScores[steamID] = {
+                    name = player():getName(),
+                    score = score
+                }
+            end
+
+            print(message .. " Score: " .. score)
+        else
+            print("Draw more! Need at least " .. MIN_POINTS .. " points")
+        end
+
+        myCurrentPoints = {}
+        isDrawing = false
+    end
+
     -- Input handling
     hook.add("inputPressed", "startDrawing", function(button)
-        if button == MOUSE.MOUSE1 then
+        if button == MOUSE.MOUSE1 and isPlayerNear() then
             isDrawing = true
             myCurrentPoints = {}
         end
@@ -207,47 +258,23 @@ if CLIENT then
 
     hook.add("inputReleased", "endDrawing", function(button)
         if button == MOUSE.MOUSE1 and isDrawing then
-            isDrawing = false
-
-            if #myCurrentPoints >= MIN_POINTS then
-                local score, message = evaluateCircle(myCurrentPoints)
-
-                -- Send to server
-                net.start("submitDrawing")
-                net.writeTable(myCurrentPoints)
-                net.writeFloat(score)
-                net.send()
-
-                -- Add locally
-                table.insert(playerDrawings, {
-                    playerName = player():getName(),
-                    points = myCurrentPoints,
-                    score = score,
-                    message = message,
-                    time = timer.curtime(),
-                    color = getScoreColor(score)
-                })
-
-                -- Update local score
-                local steamID = player():getSteamID()
-                if not playerScores[steamID] or score > playerScores[steamID].score then
-                    playerScores[steamID] = {
-                        name = player():getName(),
-                        score = score
-                    }
-                end
-
-                print(message .. " Score: " .. score)
-            else
-                print("Draw more! Need at least " .. MIN_POINTS .. " points")
-            end
-
-            myCurrentPoints = {}
+            finalizeDrawing()
         end
     end)
 
     -- Main render hook (runs when screen is linked)
     hook.add("render", "drawGame", function()
+        -- Check if player is near the chip
+        local nearChip = isPlayerNear()
+
+        -- Get cursor position
+        local mx, my = render.cursorPos()
+
+        -- Stop drawing if player looks away from screen or moves too far
+        if isDrawing and (not mx or not my or not nearChip) then
+            finalizeDrawing()
+        end
+
         -- Track mouse while drawing (must be in render hook)
         if isDrawing then
             local x, y = render.cursorPos()
@@ -428,6 +455,22 @@ if CLIENT then
             render.setColor(COLOR_TEXT_DIM)
             render.setFont("DermaDefault")
             render.drawText(boardX + boardWidth/2, boardY + 55, "No scores!", 1)
+        end
+
+        -- Distance warning overlay
+        if not nearChip then
+            -- Semi-transparent overlay
+            render.setColor(Color(0, 0, 0, 180))
+            render.drawRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+            -- Warning message
+            render.setColor(COLOR_ACCENT)
+            render.setFont("DermaLarge")
+            render.drawText(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 - 15, "TOO FAR", 1)
+
+            render.setColor(COLOR_TEXT)
+            render.setFont("DermaDefault")
+            render.drawText(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 15, "Get closer to the chip", 1)
         end
     end)
 
