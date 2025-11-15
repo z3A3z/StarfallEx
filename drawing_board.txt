@@ -50,6 +50,7 @@ if CLIENT then
     local CANVAS_HEIGHT = 512
     local TOOLBAR_HEIGHT = 70
     local DRAW_AREA_HEIGHT = CANVAS_HEIGHT - TOOLBAR_HEIGHT
+    local MAX_DISTANCE = 250 -- Maximum distance from chip to use drawing board
 
     -- Drawing state
     local strokes = {} -- All drawing strokes
@@ -86,6 +87,17 @@ if CLIENT then
     local COLOR_BUTTON = Color(30, 30, 50)
     local COLOR_BUTTON_HOVER = Color(40, 40, 65)
     local COLOR_BUTTON_ACTIVE = Color(100, 120, 255)
+
+    -- Helper: Check if player is near chip
+    local function isPlayerNear()
+        local ply = player()
+        local chipEnt = chip()
+        if not ply or not chipEnt then return false end
+
+        local plyPos = ply:getPos()
+        local chipPos = chipEnt:getPos()
+        return plyPos:getDistance(chipPos) <= MAX_DISTANCE
+    end
 
     -- Helper: Check if point is in rectangle
     local function pointInRect(x, y, rx, ry, rw, rh)
@@ -150,7 +162,7 @@ if CLIENT then
 
     -- Input handling
     hook.add("inputPressed", "startDrawing", function(button)
-        if button == MOUSE.MOUSE1 then
+        if button == MOUSE.MOUSE1 and isPlayerNear() then
             clickPending = true
         end
     end)
@@ -225,14 +237,17 @@ if CLIENT then
 
     -- Main render
     hook.add("render", "drawBoard", function()
+        -- Check if player is near the chip
+        local nearChip = isPlayerNear()
+
         -- Get current mouse position
         local mx, my = render.cursorPos()
         if mx and my then
             lastMouseX = mx
             lastMouseY = my
 
-            -- Handle pending click
-            if clickPending then
+            -- Handle pending click (only if near chip)
+            if clickPending and nearChip then
                 clickPending = false
 
                 -- Check if clicking in draw area (not toolbar)
@@ -247,6 +262,9 @@ if CLIENT then
                     -- Handle toolbar clicks
                     handleToolbarClick(mx, my)
                 end
+            elseif clickPending and not nearChip then
+                -- Clear pending click if too far
+                clickPending = false
             end
         end
 
@@ -322,10 +340,26 @@ if CLIENT then
 
         -- Cursor preview (brush size indicator)
         local mx, my = render.cursorPos()
-        if mx and my and my > TOOLBAR_HEIGHT then
+        if mx and my and my > TOOLBAR_HEIGHT and nearChip then
             render.setColor(Color(255, 255, 255, 100))
             local previewSize = isEraser and (currentSize * 3) or currentSize
             render.drawCircle(mx, my, previewSize)
+        end
+
+        -- Distance warning overlay
+        if not nearChip then
+            -- Semi-transparent overlay
+            render.setColor(Color(0, 0, 0, 180))
+            render.drawRect(0, TOOLBAR_HEIGHT, CANVAS_WIDTH, DRAW_AREA_HEIGHT)
+
+            -- Warning message
+            render.setColor(COLOR_ACCENT)
+            render.setFont("DermaLarge")
+            render.drawText(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 - 15, "TOO FAR", 1)
+
+            render.setColor(COLOR_TEXT)
+            render.setFont("DermaDefault")
+            render.drawText(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 15, "Get closer to the chip", 1)
         end
     end)
 
