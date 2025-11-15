@@ -1,0 +1,328 @@
+--@name Multiplayer Drawing Board
+--@author Claude AI
+--@shared
+--@model models/hunter/plates/plate2x2.mdl
+
+--[[
+    Multiplayer Drawing Board
+
+    A shared canvas where everyone can draw together!
+
+    SETUP:
+    1. Spawn this Starfall Processor chip
+    2. Spawn a Starfall Screen
+    3. Link them with the Starfall tool
+    4. Look at the screen and start drawing!
+
+    FEATURES:
+    - Multiple brush colors
+    - Adjustable brush size
+    - Eraser tool
+    - Clear canvas button
+    - Everyone sees everyone's drawings in real-time
+]]
+
+if SERVER then
+    -- Server broadcasts all drawing strokes to all clients
+    net.receive("drawStroke", function(len, ply)
+        local color = net.readTable()
+        local size = net.readFloat()
+        local points = net.readTable()
+
+        -- Broadcast to all clients
+        net.start("receiveStroke")
+        net.writeTable(color)
+        net.writeFloat(size)
+        net.writeTable(points)
+        net.send()
+    end)
+
+    net.receive("clearCanvas", function(len, ply)
+        -- Broadcast clear to all clients
+        net.start("receiveClear")
+        net.send()
+    end)
+end
+
+if CLIENT then
+    -- Canvas settings
+    local CANVAS_WIDTH = 512
+    local CANVAS_HEIGHT = 512
+    local TOOLBAR_HEIGHT = 70
+    local DRAW_AREA_HEIGHT = CANVAS_HEIGHT - TOOLBAR_HEIGHT
+
+    -- Drawing state
+    local strokes = {} -- All drawing strokes
+    local currentStroke = nil
+    local isDrawing = false
+
+    -- Tool settings
+    local currentColor = Color(255, 255, 255) -- Default white
+    local currentSize = 3
+    local isEraser = false
+
+    -- Color palette
+    local colors = {
+        {name = "White", color = Color(255, 255, 255)},
+        {name = "Black", color = Color(0, 0, 0)},
+        {name = "Red", color = Color(255, 50, 50)},
+        {name = "Orange", color = Color(255, 150, 50)},
+        {name = "Yellow", color = Color(255, 255, 50)},
+        {name = "Green", color = Color(50, 255, 100)},
+        {name = "Blue", color = Color(50, 150, 255)},
+        {name = "Purple", color = Color(200, 100, 255)},
+        {name = "Pink", color = Color(255, 100, 200)},
+    }
+
+    -- Brush sizes
+    local brushSizes = {1, 2, 3, 5, 8, 12}
+
+    -- UI Colors - matching perfect circle theme
+    local COLOR_BG_DARK = Color(10, 10, 18)
+    local COLOR_TOOLBAR = Color(20, 20, 35, 240)
+    local COLOR_ACCENT = Color(100, 120, 255)
+    local COLOR_TEXT = Color(220, 220, 230)
+    local COLOR_TEXT_DIM = Color(140, 140, 160)
+    local COLOR_BUTTON = Color(30, 30, 50)
+    local COLOR_BUTTON_HOVER = Color(40, 40, 65)
+    local COLOR_BUTTON_ACTIVE = Color(100, 120, 255)
+
+    -- Helper: Check if point is in rectangle
+    local function pointInRect(x, y, rx, ry, rw, rh)
+        return x >= rx and x <= rx + rw and y >= ry and y <= ry + rh
+    end
+
+    -- Helper: Draw a button
+    local function drawButton(x, y, w, h, text, isActive, textColor)
+        local buttonColor = isActive and COLOR_BUTTON_ACTIVE or COLOR_BUTTON
+        render.setColor(buttonColor)
+        render.drawRect(x, y, w, h)
+
+        -- Border
+        render.setColor(isActive and COLOR_ACCENT or Color(60, 60, 80))
+        render.drawRect(x, y, w, 2)
+        render.drawRect(x, y + h - 2, w, 2)
+        render.drawRect(x, y, 2, h)
+        render.drawRect(x + w - 2, y, 2, h)
+
+        -- Text
+        render.setColor(textColor or COLOR_TEXT)
+        render.setFont("DermaDefault")
+        render.drawText(x + w/2, y + h/2 - 7, text, 1)
+    end
+
+    -- Helper: Draw color swatch
+    local function drawColorSwatch(x, y, size, color, isActive)
+        render.setColor(color)
+        render.drawRect(x, y, size, size)
+
+        -- Border
+        local borderColor = isActive and COLOR_ACCENT or Color(60, 60, 80)
+        local borderWidth = isActive and 3 : 2
+        render.setColor(borderColor)
+        render.drawRect(x, y, size, borderWidth)
+        render.drawRect(x, y + size - borderWidth, size, borderWidth)
+        render.drawRect(x, y, borderWidth, size)
+        render.drawRect(x + size - borderWidth, y, borderWidth, size)
+    end
+
+    -- Network receivers
+    net.receive("receiveStroke", function()
+        local color = net.readTable()
+        local size = net.readFloat()
+        local points = net.readTable()
+
+        table.insert(strokes, {
+            color = Color(color.r, color.g, color.b),
+            size = size,
+            points = points
+        })
+    end)
+
+    net.receive("receiveClear", function()
+        strokes = {}
+    end)
+
+    -- Input handling
+    hook.add("inputPressed", "startDrawing", function(button)
+        if button == MOUSE.MOUSE1 then
+            local mx, my = render.cursorPos()
+            if mx and my then
+                -- Check if clicking in draw area (not toolbar)
+                if my > TOOLBAR_HEIGHT then
+                    isDrawing = true
+                    currentStroke = {
+                        color = isEraser and COLOR_BG_DARK or currentColor,
+                        size = isEraser and (currentSize * 3) or currentSize,
+                        points = {}
+                    }
+                else
+                    -- Handle toolbar clicks
+                    handleToolbarClick(mx, my)
+                end
+            end
+        end
+    end)
+
+    hook.add("inputReleased", "endDrawing", function(button)
+        if button == MOUSE.MOUSE1 and isDrawing then
+            isDrawing = false
+
+            if currentStroke and #currentStroke.points > 1 then
+                -- Send stroke to server
+                net.start("drawStroke")
+                net.writeTable({r = currentStroke.color.r, g = currentStroke.color.g, b = currentStroke.color.b})
+                net.writeFloat(currentStroke.size)
+                net.writeTable(currentStroke.points)
+                net.send()
+
+                -- Add to local strokes
+                table.insert(strokes, currentStroke)
+            end
+
+            currentStroke = nil
+        end
+    end)
+
+    -- Handle toolbar button clicks
+    function handleToolbarClick(mx, my)
+        -- Color swatches (starting at x=10)
+        local swatchSize = 24
+        local swatchY = 10
+        for i, colorData in ipairs(colors) do
+            local swatchX = 10 + (i - 1) * (swatchSize + 4)
+            if pointInRect(mx, my, swatchX, swatchY, swatchSize, swatchSize) then
+                currentColor = colorData.color
+                isEraser = false
+                return
+            end
+        end
+
+        -- Brush size buttons (below colors)
+        local sizeButtonY = 40
+        local sizeButtonWidth = 30
+        for i, size in ipairs(brushSizes) do
+            local buttonX = 10 + (i - 1) * (sizeButtonWidth + 4)
+            if pointInRect(mx, my, buttonX, sizeButtonY, sizeButtonWidth, 22) then
+                currentSize = size
+                return
+            end
+        end
+
+        -- Eraser button
+        if pointInRect(mx, my, 300, 10, 60, 25) then
+            isEraser = not isEraser
+            return
+        end
+
+        -- Clear button
+        if pointInRect(mx, my, 370, 10, 60, 25) then
+            strokes = {}
+            net.start("clearCanvas")
+            net.send()
+            return
+        end
+
+        -- Undo button
+        if pointInRect(mx, my, 440, 10, 60, 25) then
+            if #strokes > 0 then
+                table.remove(strokes, #strokes)
+            end
+            return
+        end
+    end
+
+    -- Main render
+    hook.add("render", "drawBoard", function()
+        -- Track mouse while drawing
+        if isDrawing and currentStroke then
+            local x, y = render.cursorPos()
+            if x and y then
+                y = math.clamp(y, TOOLBAR_HEIGHT, CANVAS_HEIGHT)
+                x = math.clamp(x, 0, CANVAS_WIDTH)
+
+                table.insert(currentStroke.points, {x = x, y = y})
+            end
+        end
+
+        -- Background
+        render.setColor(COLOR_BG_DARK)
+        render.drawRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
+
+        -- Draw all strokes
+        for _, stroke in ipairs(strokes) do
+            render.setColor(stroke.color)
+            for i = 1, #stroke.points - 1 do
+                local p1 = stroke.points[i]
+                local p2 = stroke.points[i + 1]
+
+                -- Draw thick line by drawing multiple offset lines
+                for offset = -stroke.size/2, stroke.size/2 do
+                    render.drawLine(p1.x + offset, p1.y, p2.x + offset, p2.y)
+                    render.drawLine(p1.x, p1.y + offset, p2.x, p2.y + offset)
+                end
+            end
+        end
+
+        -- Draw current stroke being drawn
+        if currentStroke and #currentStroke.points > 1 then
+            render.setColor(currentStroke.color)
+            for i = 1, #currentStroke.points - 1 do
+                local p1 = currentStroke.points[i]
+                local p2 = currentStroke.points[i + 1]
+
+                for offset = -currentStroke.size/2, currentStroke.size/2 do
+                    render.drawLine(p1.x + offset, p1.y, p2.x + offset, p2.y)
+                    render.drawLine(p1.x, p1.y + offset, p2.x, p2.y + offset)
+                end
+            end
+        end
+
+        -- Toolbar background
+        render.setColor(COLOR_TOOLBAR)
+        render.drawRect(0, 0, CANVAS_WIDTH, TOOLBAR_HEIGHT)
+
+        -- Color swatches
+        local swatchSize = 24
+        local swatchY = 10
+        for i, colorData in ipairs(colors) do
+            local swatchX = 10 + (i - 1) * (swatchSize + 4)
+            local isActive = not isEraser and currentColor.r == colorData.color.r and
+                           currentColor.g == colorData.color.g and currentColor.b == colorData.color.b
+            drawColorSwatch(swatchX, swatchY, swatchSize, colorData.color, isActive)
+        end
+
+        -- Brush size buttons
+        local sizeButtonY = 40
+        local sizeButtonWidth = 30
+        for i, size in ipairs(brushSizes) do
+            local buttonX = 10 + (i - 1) * (sizeButtonWidth + 4)
+            drawButton(buttonX, sizeButtonY, sizeButtonWidth, 22, tostring(size), currentSize == size)
+        end
+
+        -- Tool buttons
+        drawButton(300, 10, 60, 25, "Eraser", isEraser, isEraser and COLOR_TEXT or COLOR_TEXT_DIM)
+        drawButton(370, 10, 60, 25, "Clear", false, Color(255, 100, 100))
+        drawButton(440, 10, 60, 25, "Undo", false)
+
+        -- Current tool info
+        render.setColor(COLOR_TEXT_DIM)
+        render.setFont("DermaDefault")
+        local toolText = isEraser and "Eraser" or "Brush"
+        render.drawText(300, 43, toolText .. " • Size: " .. currentSize, 0)
+
+        -- Draw area separator line
+        render.setColor(COLOR_ACCENT)
+        render.drawRect(0, TOOLBAR_HEIGHT, CANVAS_WIDTH, 2)
+
+        -- Cursor preview (brush size indicator)
+        local mx, my = render.cursorPos()
+        if mx and my and my > TOOLBAR_HEIGHT then
+            render.setColor(Color(255, 255, 255, 100))
+            local previewSize = isEraser and (currentSize * 3) or currentSize
+            render.drawCircle(mx, my, previewSize)
+        end
+    end)
+
+    print("Multiplayer Drawing Board loaded!")
+end
