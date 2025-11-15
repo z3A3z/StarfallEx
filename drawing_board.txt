@@ -143,24 +143,15 @@ if CLIENT then
         strokes = {}
     end)
 
+    -- Track last mouse position for toolbar clicks
+    local lastMouseX = 0
+    local lastMouseY = 0
+    local clickPending = false
+
     -- Input handling
     hook.add("inputPressed", "startDrawing", function(button)
         if button == MOUSE.MOUSE1 then
-            local mx, my = render.cursorPos()
-            if mx and my then
-                -- Check if clicking in draw area (not toolbar)
-                if my > TOOLBAR_HEIGHT then
-                    isDrawing = true
-                    currentStroke = {
-                        color = isEraser and COLOR_BG_DARK or currentColor,
-                        size = isEraser and (currentSize * 3) or currentSize,
-                        points = {}
-                    }
-                else
-                    -- Handle toolbar clicks
-                    handleToolbarClick(mx, my)
-                end
-            end
+            clickPending = true
         end
     end)
 
@@ -234,6 +225,31 @@ if CLIENT then
 
     -- Main render
     hook.add("render", "drawBoard", function()
+        -- Get current mouse position
+        local mx, my = render.cursorPos()
+        if mx and my then
+            lastMouseX = mx
+            lastMouseY = my
+
+            -- Handle pending click
+            if clickPending then
+                clickPending = false
+
+                -- Check if clicking in draw area (not toolbar)
+                if my > TOOLBAR_HEIGHT then
+                    isDrawing = true
+                    currentStroke = {
+                        color = isEraser and COLOR_BG_DARK or currentColor,
+                        size = isEraser and (currentSize * 3) or currentSize,
+                        points = {}
+                    }
+                else
+                    -- Handle toolbar clicks
+                    handleToolbarClick(mx, my)
+                end
+            end
+        end
+
         -- Track mouse while drawing
         if isDrawing and currentStroke then
             local x, y = render.cursorPos()
