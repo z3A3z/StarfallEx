@@ -268,29 +268,20 @@ if CLIENT then
         -- Draw all strokes
         for _, stroke in ipairs(strokes) do
             render.setColor(stroke.color)
-            for i = 1, #stroke.points - 1 do
-                local p1 = stroke.points[i]
-                local p2 = stroke.points[i + 1]
-
-                -- Draw thick line by drawing multiple offset lines
-                for offset = -stroke.size/2, stroke.size/2 do
-                    render.drawLine(p1.x + offset, p1.y, p2.x + offset, p2.y)
-                    render.drawLine(p1.x, p1.y + offset, p2.x, p2.y + offset)
-                end
+            -- Draw circles at each point for smooth thick lines
+            for i = 1, #stroke.points do
+                local p = stroke.points[i]
+                render.drawCircle(p.x, p.y, stroke.size)
             end
         end
 
         -- Draw current stroke being drawn
-        if currentStroke and #currentStroke.points > 1 then
+        if currentStroke and #currentStroke.points > 0 then
             render.setColor(currentStroke.color)
-            for i = 1, #currentStroke.points - 1 do
-                local p1 = currentStroke.points[i]
-                local p2 = currentStroke.points[i + 1]
-
-                for offset = -currentStroke.size/2, currentStroke.size/2 do
-                    render.drawLine(p1.x + offset, p1.y, p2.x + offset, p2.y)
-                    render.drawLine(p1.x, p1.y + offset, p2.x, p2.y + offset)
-                end
+            -- Draw circles at each point for smooth thick lines
+            for i = 1, #currentStroke.points do
+                local p = currentStroke.points[i]
+                render.drawCircle(p.x, p.y, currentStroke.size)
             end
         end
 
