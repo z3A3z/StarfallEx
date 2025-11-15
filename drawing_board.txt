@@ -167,23 +167,27 @@ if CLIENT then
         end
     end)
 
+    -- Helper: Finalize current stroke
+    local function finalizeStroke()
+        if currentStroke and #currentStroke.points > 1 then
+            -- Send stroke to server
+            net.start("drawStroke")
+            net.writeTable({r = currentStroke.color.r, g = currentStroke.color.g, b = currentStroke.color.b})
+            net.writeFloat(currentStroke.size)
+            net.writeTable(currentStroke.points)
+            net.send()
+
+            -- Add to local strokes
+            table.insert(strokes, currentStroke)
+        end
+
+        currentStroke = nil
+        isDrawing = false
+    end
+
     hook.add("inputReleased", "endDrawing", function(button)
         if button == MOUSE.MOUSE1 and isDrawing then
-            isDrawing = false
-
-            if currentStroke and #currentStroke.points > 1 then
-                -- Send stroke to server
-                net.start("drawStroke")
-                net.writeTable({r = currentStroke.color.r, g = currentStroke.color.g, b = currentStroke.color.b})
-                net.writeFloat(currentStroke.size)
-                net.writeTable(currentStroke.points)
-                net.send()
-
-                -- Add to local strokes
-                table.insert(strokes, currentStroke)
-            end
-
-            currentStroke = nil
+            finalizeStroke()
         end
     end)
 
@@ -242,6 +246,12 @@ if CLIENT then
 
         -- Get current mouse position
         local mx, my = render.cursorPos()
+
+        -- Stop drawing if player looks away from screen or moves too far
+        if isDrawing and (not mx or not my or not nearChip) then
+            finalizeStroke()
+        end
+
         if mx and my then
             lastMouseX = mx
             lastMouseY = my
