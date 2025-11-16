@@ -1,7 +1,4 @@
---@name Cookie Clicker UI
---@author Claude AI
---@client
-
+if CLIENT then
 -- UI Constants
 local CANVAS_WIDTH = 512
 local CANVAS_HEIGHT = 512
@@ -488,4 +485,5 @@ function handleUIClick(mx, my, gameState, currentTab)
     end
 
     return currentTab
+end
 end

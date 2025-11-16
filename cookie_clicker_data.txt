@@ -1,7 +1,3 @@
---@name Cookie Clicker Data
---@author Claude AI
---@shared
-
 -- Building definitions
 BUILDINGS = {
     {
