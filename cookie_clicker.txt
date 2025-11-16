@@ -24,6 +24,9 @@
     - Prestige system for late game
 ]]
 
+-- Load included files
+require("cookie_clicker_data")
+
 -- Shared game state structure
 GAME = GAME or {
     cookies = 0,
@@ -210,6 +213,9 @@ if SERVER then
 end
 
 if CLIENT then
+    -- Load UI functions
+    require("cookie_clicker_ui")
+
     -- Local game state (synced from server)
     local gameState = {
         cookies = 0,
