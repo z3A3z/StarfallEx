@@ -2,8 +2,8 @@
 --@author Claude AI
 --@shared
 --@model models/hunter/plates/plate2x2.mdl
---@include cookie_clicker_data.txt
---@include cookie_clicker_ui.txt
+--@include cookie_clicker_data
+--@include cookie_clicker_ui
 
 --[[
     Cookie Clicker Empire - Multiplayer Idle Game
