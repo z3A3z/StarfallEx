@@ -186,8 +186,11 @@ if CLIENT then
     end
 
     hook.add("inputReleased", "endDrawing", function(button)
-        if button == MOUSE.MOUSE1 and isDrawing then
-            finalizeStroke()
+        if button == MOUSE.MOUSE1 then
+            clickPending = false  -- Always clear pending click on release
+            if isDrawing then
+                finalizeStroke()
+            end
         end
     end)
 
