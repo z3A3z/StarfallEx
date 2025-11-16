@@ -1,0 +1,410 @@
+--@name Cookie Clicker Data
+--@author Claude AI
+--@shared
+
+-- Building definitions
+BUILDINGS = {
+    {
+        id = 1,
+        name = "Cursor",
+        desc = "Auto-clicks once every 10 seconds",
+        baseCost = 15,
+        cps = 0.1,
+        icon = "👆",
+        upgradeIds = {1, 2, 3}
+    },
+    {
+        id = 2,
+        name = "Grandma",
+        desc = "A nice grandma to bake cookies",
+        baseCost = 100,
+        cps = 1,
+        icon = "👵",
+        upgradeIds = {4, 5, 6}
+    },
+    {
+        id = 3,
+        name = "Farm",
+        desc = "Grows cookie plants",
+        baseCost = 1100,
+        cps = 8,
+        icon = "🌾",
+        upgradeIds = {7, 8}
+    },
+    {
+        id = 4,
+        name = "Mine",
+        desc = "Mines cookie dough",
+        baseCost = 12000,
+        cps = 47,
+        icon = "⛏️",
+        upgradeIds = {9, 10}
+    },
+    {
+        id = 5,
+        name = "Factory",
+        desc = "Mass-produces cookies",
+        baseCost = 130000,
+        cps = 260,
+        icon = "🏭",
+        upgradeIds = {11, 12}
+    },
+    {
+        id = 6,
+        name = "Bank",
+        desc = "Generates cookies from interest",
+        baseCost = 1400000,
+        cps = 1400,
+        icon = "🏦",
+        upgradeIds = {13, 14}
+    },
+    {
+        id = 7,
+        name = "Temple",
+        desc = "Worships the cookie gods",
+        baseCost = 20000000,
+        cps = 7800,
+        icon = "⛩️",
+        upgradeIds = {15, 16}
+    },
+    {
+        id = 8,
+        name = "Wizard Tower",
+        desc = "Summons cookies with magic",
+        baseCost = 330000000,
+        cps = 44000,
+        icon = "🧙",
+        upgradeIds = {17, 18}
+    },
+    {
+        id = 9,
+        name = "Shipment",
+        desc = "Imports cookies from overseas",
+        baseCost = 5100000000,
+        cps = 260000,
+        icon = "🚢",
+        upgradeIds = {19, 20}
+    },
+    {
+        id = 10,
+        name = "Alchemy Lab",
+        desc = "Transmutes gold into cookies",
+        baseCost = 75000000000,
+        cps = 1600000,
+        icon = "⚗️",
+        upgradeIds = {21, 22}
+    },
+    {
+        id = 11,
+        name = "Portal",
+        desc = "Opens portals to cookie dimension",
+        baseCost = 1000000000000,
+        cps = 10000000,
+        icon = "🌀",
+        upgradeIds = {23, 24}
+    },
+    {
+        id = 12,
+        name = "Time Machine",
+        desc = "Brings cookies from the future",
+        baseCost = 14000000000000,
+        cps = 65000000,
+        icon = "⏰",
+        upgradeIds = {25, 26}
+    }
+}
+
+-- Upgrade definitions
+UPGRADES = {
+    -- Cursor upgrades
+    {
+        id = 1,
+        name = "Reinforced Fingers",
+        desc = "Cursors are twice as efficient",
+        cost = 100,
+        buildingId = 1,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[1] or 0) >= 1 end
+    },
+    {
+        id = 2,
+        name = "Carpal Tunnel Prevention",
+        desc = "Cursors are twice as efficient",
+        cost = 500,
+        buildingId = 1,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[1] or 0) >= 5 end
+    },
+    {
+        id = 3,
+        name = "Ambidextrous",
+        desc = "Cursors are twice as efficient",
+        cost = 10000,
+        buildingId = 1,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[1] or 0) >= 25 end
+    },
+
+    -- Grandma upgrades
+    {
+        id = 4,
+        name = "Forwards from Grandma",
+        desc = "Grandmas are twice as efficient",
+        cost = 1000,
+        buildingId = 2,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[2] or 0) >= 1 end
+    },
+    {
+        id = 5,
+        name = "Steel-plated Rolling Pins",
+        desc = "Grandmas are twice as efficient",
+        cost = 5000,
+        buildingId = 2,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[2] or 0) >= 5 end
+    },
+    {
+        id = 6,
+        name = "Lubricated Dentures",
+        desc = "Grandmas are twice as efficient",
+        cost = 50000,
+        buildingId = 2,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[2] or 0) >= 25 end
+    },
+
+    -- Farm upgrades
+    {
+        id = 7,
+        name = "Cheap Hoes",
+        desc = "Farms are twice as efficient",
+        cost = 11000,
+        buildingId = 3,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[3] or 0) >= 1 end
+    },
+    {
+        id = 8,
+        name = "Fertilizer",
+        desc = "Farms are twice as efficient",
+        cost = 55000,
+        buildingId = 3,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[3] or 0) >= 5 end
+    },
+
+    -- Mine upgrades
+    {
+        id = 9,
+        name = "Sugar Gas",
+        desc = "Mines are twice as efficient",
+        cost = 120000,
+        buildingId = 4,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[4] or 0) >= 1 end
+    },
+    {
+        id = 10,
+        name = "Megadrill",
+        desc = "Mines are twice as efficient",
+        cost = 600000,
+        buildingId = 4,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[4] or 0) >= 5 end
+    },
+
+    -- Factory upgrades
+    {
+        id = 11,
+        name = "Sturdier Conveyor Belts",
+        desc = "Factories are twice as efficient",
+        cost = 1300000,
+        buildingId = 5,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[5] or 0) >= 1 end
+    },
+    {
+        id = 12,
+        name = "Child Labor",
+        desc = "Factories are twice as efficient",
+        cost = 6500000,
+        buildingId = 5,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[5] or 0) >= 5 end
+    },
+
+    -- Bank upgrades
+    {
+        id = 13,
+        name = "Taller Tellers",
+        desc = "Banks are twice as efficient",
+        cost = 14000000,
+        buildingId = 6,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[6] or 0) >= 1 end
+    },
+    {
+        id = 14,
+        name = "Scissor-resistant Credit Cards",
+        desc = "Banks are twice as efficient",
+        cost = 70000000,
+        buildingId = 6,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[6] or 0) >= 5 end
+    },
+
+    -- Temple upgrades
+    {
+        id = 15,
+        name = "Golden Idols",
+        desc = "Temples are twice as efficient",
+        cost = 200000000,
+        buildingId = 7,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[7] or 0) >= 1 end
+    },
+    {
+        id = 16,
+        name = "Sacrifices",
+        desc = "Temples are twice as efficient",
+        cost = 1000000000,
+        buildingId = 7,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[7] or 0) >= 5 end
+    },
+
+    -- Wizard Tower upgrades
+    {
+        id = 17,
+        name = "Pointier Hats",
+        desc = "Wizard Towers are twice as efficient",
+        cost = 3300000000,
+        buildingId = 8,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[8] or 0) >= 1 end
+    },
+    {
+        id = 18,
+        name = "Beardlier Beards",
+        desc = "Wizard Towers are twice as efficient",
+        cost = 16500000000,
+        buildingId = 8,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[8] or 0) >= 5 end
+    },
+
+    -- Shipment upgrades
+    {
+        id = 19,
+        name = "Vanilla Nebulae",
+        desc = "Shipments are twice as efficient",
+        cost = 51000000000,
+        buildingId = 9,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[9] or 0) >= 1 end
+    },
+    {
+        id = 20,
+        name = "Wormholes",
+        desc = "Shipments are twice as efficient",
+        cost = 255000000000,
+        buildingId = 9,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[9] or 0) >= 5 end
+    },
+
+    -- Alchemy Lab upgrades
+    {
+        id = 21,
+        name = "Antimony",
+        desc = "Alchemy Labs are twice as efficient",
+        cost = 750000000000,
+        buildingId = 10,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[10] or 0) >= 1 end
+    },
+    {
+        id = 22,
+        name = "Essence of Dough",
+        desc = "Alchemy Labs are twice as efficient",
+        cost = 3750000000000,
+        buildingId = 10,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[10] or 0) >= 5 end
+    },
+
+    -- Portal upgrades
+    {
+        id = 23,
+        name = "Ancient Tablet",
+        desc = "Portals are twice as efficient",
+        cost = 10000000000000,
+        buildingId = 11,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[11] or 0) >= 1 end
+    },
+    {
+        id = 24,
+        name = "Insane Oatling Workers",
+        desc = "Portals are twice as efficient",
+        cost = 50000000000000,
+        buildingId = 11,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[11] or 0) >= 5 end
+    },
+
+    -- Time Machine upgrades
+    {
+        id = 25,
+        name = "Flux Capacitors",
+        desc = "Time Machines are twice as efficient",
+        cost = 140000000000000,
+        buildingId = 12,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[12] or 0) >= 1 end
+    },
+    {
+        id = 26,
+        name = "Time Paradox Resolver",
+        desc = "Time Machines are twice as efficient",
+        cost = 700000000000000,
+        buildingId = 12,
+        multiplier = 2,
+        requires = function(game) return (game.buildings[12] or 0) >= 5 end
+    },
+
+    -- Click power upgrades
+    {
+        id = 27,
+        name = "Plastic Mouse",
+        desc = "+1 cookie per click",
+        cost = 50,
+        clickBonus = 1,
+        requires = function(game) return game.totalCookies >= 100 end
+    },
+    {
+        id = 28,
+        name = "Iron Mouse",
+        desc = "+5 cookies per click",
+        cost = 5000,
+        clickBonus = 5,
+        requires = function(game) return game.totalCookies >= 10000 end
+    },
+    {
+        id = 29,
+        name = "Titanium Mouse",
+        desc = "+10 cookies per click",
+        cost = 500000,
+        clickBonus = 10,
+        requires = function(game) return game.totalCookies >= 1000000 end
+    },
+    {
+        id = 30,
+        name = "Adamantium Mouse",
+        desc = "+50 cookies per click",
+        cost = 50000000,
+        clickBonus = 50,
+        requires = function(game) return game.totalCookies >= 100000000 end
+    }
+}
